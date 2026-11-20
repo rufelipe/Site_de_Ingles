@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#f5f7ff" />
+    <title>Login | English School</title>
+    <link rel="stylesheet" href="styles.css" />
+    <link rel="stylesheet" href="teacher.css" />
+  </head>
+  <body>
+    <main class="login-page" data-role="aluno">
+      <section class="welcome-panel" aria-label="Apresentação da escola">
+        <div class="brand-mark" aria-hidden="true">E</div>
+        <p class="eyebrow">ENGLISH SCHOOL</p>
+        <h1>Seu próximo capítulo começa em inglês.</h1>
+        <p class="welcome-copy">Aprenda no seu ritmo. Conecte-se com o mundo.</p>
+        <div class="decorative-orbit orbit-one" aria-hidden="true"></div>
+        <div class="decorative-orbit orbit-two" aria-hidden="true"></div>
+        <span class="floating-word word-one" aria-hidden="true">hello!</span>
+        <span class="floating-word word-two" aria-hidden="true">learn</span>
+      </section>
+
+      <section class="form-panel" aria-labelledby="form-title">
+        <div class="role-switch" role="group" aria-label="Escolha seu perfil">
+          <button class="role-button active" type="button" data-role="aluno" aria-pressed="true">Aluno</button>
+          <button class="role-button" type="button" data-role="professor" aria-pressed="false">Professor</button>
+        </div>
+
+        <div class="form-content">
+          <p class="eyebrow form-eyebrow">BEM-VINDO DE VOLTA</p>
+          <h2 id="form-title">Acesse sua conta</h2>
+          <p class="form-description" id="role-description">Entre para continuar sua jornada de aprendizado.</p>
+
+          <form id="login-form">
+            <label for="login">Login</label>
+            <input id="login" name="login" type="text" placeholder="Digite seu login" autocomplete="username" required />
+
+            <label for="password">Password</label>
+            <input id="password" name="password" type="password" placeholder="Digite sua senha" autocomplete="current-password" required />
+
+            <label class="remember-option" for="remember">
+              <input id="remember" name="remember" type="checkbox" />
+              <span>Lembrar meu usuário e senha</span>
+            </label>
+
+            <button class="submit-button" type="submit">Logar <span aria-hidden="true">→</span></button>
+            <p class="form-message" id="form-message" role="status" aria-live="polite"></p>
+          </form>
+        </div>
+        <p class="help-note" id="help-note">Precisa de ajuda? <a href="mailto:contato@englishschool.com">Fale com a escola</a></p>
+      </section>
+    </main>
+
+    <main class="student-dashboard" id="student-dashboard" hidden>
+      <div class="space-backdrop" aria-hidden="true">
+        <div class="nebula nebula-one"></div><div class="nebula nebula-two"></div><div class="nebula nebula-three"></div>
+        <div class="starfield starfield-far"></div><div class="starfield starfield-near"></div>
+        <div class="solar-system system-one"><i class="orbit orbit-one"><b class="planet planet-one"></b></i><i class="orbit orbit-two"><b class="planet planet-two"></b></i><b class="sun"></b></div>
+        <div class="solar-system system-two"><i class="orbit orbit-one"><b class="planet planet-one"></b></i><i class="orbit orbit-two"><b class="planet planet-two"></b></i><b class="sun"></b></div>
+        <div class="solar-system system-three"><i class="orbit orbit-one"><b class="planet planet-one"></b></i><b class="sun"></b></div>
+      </div>
+      <a class="skip-link" href="#dashboard-content" data-i18n="skipToContent">Pular para o conteúdo</a>
+      <aside class="dashboard-sidebar" aria-label="Navegação do aluno">
+        <a class="dashboard-brand" href="#dashboard-home" aria-label="English School, início">
+          <span class="dashboard-brand-mark" aria-hidden="true">E</span>
+          <span>English <strong>School</strong></span>
+        </a>
+
+        <p class="sidebar-label" data-i18n="menu">MENU</p>
+        <nav class="dashboard-nav">
+          <a class="dashboard-nav-link active" href="#dashboard-home" aria-current="page"><span aria-hidden="true">⌂</span> <span data-i18n="overview">Visão geral</span></a>
+          <a class="dashboard-nav-link" href="#learning"><span aria-hidden="true">▤</span> <span data-i18n="myLearning">Meu aprendizado</span></a>
+          <a class="dashboard-nav-link" href="#weekly-goal"><span aria-hidden="true">◷</span> <span data-i18n="myProgress">Meu progresso</span></a>
+          <button class="dashboard-nav-link feedback-open-button" id="open-feedback-dialog" type="button"><span aria-hidden="true">✉</span> <span data-i18n="suggestImprovements">Sugerir melhorias</span></button>
+        </nav>
+
+        <div class="sidebar-profile">
+          <button class="profile-avatar avatar-edit-button" id="sidebar-avatar" type="button" aria-label="Personalizar avatar">R</button>
+          <button class="profile-settings-button" id="open-profile-settings" type="button" aria-haspopup="dialog" aria-label="Abrir configurações de perfil">
+            <span class="profile-details"><strong>Rudson</strong><small data-i18n="student">Aluno</small></span>
+          </button>
+          <button class="logout-button" type="button" data-i18n="logout" aria-label="Sair" title="Sair">Sair</button>
+        </div>
+      </aside>
+
+      <section class="dashboard-main" id="dashboard-content" aria-label="Painel do aluno">
+        <header class="dashboard-topbar">
+          <p id="dashboard-breadcrumb" data-i18n="overview">Visão geral</p>
+          <label class="language-control" for="language-select">
+            <span id="language-flag" aria-hidden="true">🇧🇷</span>
+            <select id="language-select" aria-label="Idioma / Language">
+              <option value="pt">Português</option>
+              <option value="en">English</option>
+            </select>
+          </label>
+        </header>
+
+        <div class="dashboard-content" id="dashboard-home">
+          <section class="dashboard-welcome" aria-labelledby="dashboard-title">
+            <div class="welcome-copy-block">
+              <p class="dashboard-eyebrow" data-i18n="journey">SUA JORNADA EM INGLÊS</p>
+              <div class="welcome-identity">
+                <button class="profile-avatar welcome-avatar avatar-edit-button" id="welcome-avatar" type="button" aria-label="Personalizar avatar">R</button>
+                <div>
+                  <h1 id="dashboard-title" tabindex="-1"><span data-i18n="helloRudson">Olá, Rudson</span> <span aria-hidden="true">✦</span></h1>
+                  <p class="student-page-label" data-i18n="studentPage">Página do aluno</p>
+                </div>
+              </div>
+              <p data-i18n="welcomeMessage">Que bom ter você por aqui. Vamos aprender algo novo hoje?</p>
+            </div>
+            <div class="welcome-decoration" aria-hidden="true">Hello!</div>
+          </section>
+
+          <section class="dashboard-hero" id="weekly-goal" aria-labelledby="goal-title">
+            <div class="hero-copy">
+              <p class="dashboard-eyebrow" data-i18n="weeklyGoal">META DA SEMANA</p>
+              <h2 id="goal-title" data-i18n="goalTitle">Cada aula é um passo à frente.</h2>
+              <p data-i18n="goalDescription">Crie o hábito de estudar um pouco todos os dias e acompanhe sua evolução.</p>
+              <a class="dashboard-primary-link" href="#learning"><span data-i18n="startLearning">Começar a aprender</span> <span aria-hidden="true">→</span></a>
+            </div>
+            <div class="goal-card" aria-label="Meta inicial: zero de cinco aulas concluídas">
+              <div class="goal-card-top"><span data-i18n="yourPace">Seu ritmo</span><span class="goal-icon" aria-hidden="true">✦</span></div>
+              <strong>0 <small data-i18n="lessonsOfFive">/ 5 aulas</small></strong>
+              <div class="progress-track" role="progressbar" aria-label="Progresso da meta semanal" aria-valuemin="0" aria-valuemax="5" aria-valuenow="0"><span></span></div>
+              <p data-i18n="weeklyGoalStart">Sua meta semanal começa aqui</p>
+            </div>
+            <span class="hero-orb hero-orb-one" aria-hidden="true"></span>
+            <span class="hero-orb hero-orb-two" aria-hidden="true"></span>
+          </section>
+
+          <section class="learning-section" id="learning" aria-labelledby="learning-title">
+            <div class="section-heading">
+              <div><p class="dashboard-eyebrow" data-i18n="continueAtPace">CONTINUE NO SEU RITMO</p><h2 id="learning-title" data-i18n="yourLearning">Seu aprendizado</h2></div>
+              <span class="course-count" data-i18n="oneTrack">1 trilha disponível</span>
+            </div>
+
+            <article class="course-card">
+              <div class="course-art" aria-hidden="true"><span>EN</span><span class="course-art-spark">✦</span></div>
+              <div class="course-info">
+                <div class="course-tags"><span data-i18n="beginner">INICIANTE</span><span data-i18n="firstSteps">PRIMEIROS PASSOS</span></div>
+                <h3 data-i18n="courseTitle">Inglês para o dia a dia</h3>
+                <p data-i18n="courseDescription">Aprenda expressões úteis para se apresentar e conversar em situações cotidianas.</p>
+                <div class="course-progress"><span data-i18n="trackProgress">Progresso da trilha</span><strong>0%</strong></div>
+                <div class="progress-track course-progress-track" role="progressbar" aria-label="Progresso da trilha de inglês para o dia a dia" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><span></span></div>
+              </div>
+              <a class="course-action" href="#next-lesson" aria-label="Ir para a próxima aula">→</a>
+            </article>
+          </section>
+
+          <section class="learning-section assigned-lessons" id="assigned-lessons-section" aria-labelledby="assigned-lessons-title" hidden>
+            <div class="section-heading"><div><p class="dashboard-eyebrow">MATERIAL DA TURMA</p><h2 id="assigned-lessons-title">Lições enviadas pelo professor</h2></div></div>
+                        <div id="assigned-lessons-list"></div>
+            <section class="student-lesson-screen" id="student-lesson-screen" aria-labelledby="student-lesson-title" hidden>
+              <button class="student-lesson-back" id="student-lesson-back" type="button">← Todas as lições</button>
+              <header class="student-lesson-heading"><div><p class="dashboard-eyebrow" id="student-lesson-level"></p><h2 id="student-lesson-title"></h2></div></header>
+              <div class="student-lesson-workspace">
+                <section class="student-lesson-viewer" aria-label="Material da lição">
+                  <div id="student-lesson-viewer-content"></div>
+                  <nav class="student-lesson-file-nav" id="student-lesson-file-nav" aria-label="Arquivos da lição"></nav>
+                </section>
+                <aside class="student-lesson-notes">
+                  <label for="student-lesson-notes-input">Anotações desta lição</label>
+                  <p>Suas anotações ficam salvas neste navegador.</p>
+                  <div class="student-notes-toolbar" role="toolbar" aria-label="Formatação das anotações">
+                    <button type="button" data-note-command="undo" aria-label="Desfazer" title="Desfazer">↶</button>
+                    <button type="button" data-note-command="redo" aria-label="Refazer" title="Refazer">↷</button>
+                    <span class="notes-toolbar-divider" aria-hidden="true"></span>
+                    <select data-note-command="fontName" aria-label="Fonte" title="Fonte">
+                      <option value="Arial">Arial</option><option value="Calibri">Calibri</option><option value="Georgia">Georgia</option><option value="'Times New Roman'">Times New Roman</option><option value="Verdana">Verdana</option>
+                    </select>
+                    <select data-note-command="fontSize" aria-label="Tamanho da fonte" title="Tamanho da fonte">
+                      <option value="2">Pequeno</option><option value="3" selected>Normal</option><option value="4">Grande</option><option value="5">Muito grande</option><option value="6">Título</option>
+                    </select>
+                    <span class="notes-toolbar-divider" aria-hidden="true"></span>
+                    <button type="button" data-note-command="bold" aria-label="Negrito" title="Negrito"><strong>B</strong></button>
+                    <button type="button" data-note-command="italic" aria-label="Itálico" title="Itálico"><em>I</em></button>
+                    <button type="button" data-note-command="underline" aria-label="Sublinhado" title="Sublinhado"><u>U</u></button>
+                    <button type="button" data-note-command="strikeThrough" aria-label="Tachado" title="Tachado"><s>S</s></button>
+                    <button type="button" data-note-command="justifyLeft" aria-label="Alinhar à esquerda" title="Alinhar à esquerda">☰</button>
+                    <button type="button" data-note-command="justifyCenter" aria-label="Centralizar" title="Centralizar">≡</button>
+                    <button type="button" data-note-command="justifyRight" aria-label="Alinhar à direita" title="Alinhar à direita">☷</button>
+                    <button type="button" data-note-command="insertUnorderedList" aria-label="Lista com marcadores" title="Lista com marcadores">• Lista</button>
+                    <button type="button" data-note-command="insertOrderedList" aria-label="Lista numerada" title="Lista numerada">1. Lista</button>
+                    <button type="button" data-note-command="indent" aria-label="Aumentar recuo" title="Aumentar recuo">→</button>
+                    <button type="button" data-note-command="outdent" aria-label="Diminuir recuo" title="Diminuir recuo">←</button>
+                    <select data-note-command="formatBlock" aria-label="Estilo do parágrafo" title="Estilo do parágrafo">
+                      <option value="p">Texto normal</option><option value="h2">Título</option><option value="h3">Subtítulo</option><option value="blockquote">Citação</option>
+                    </select>
+                    <label class="student-note-color" title="Cor do texto">A <input id="student-note-color" type="color" value="#7042a7" aria-label="Cor do texto"></label>
+                    <label class="student-note-color" title="Realce do texto">▰ <input id="student-note-highlight" type="color" value="#fff29a" aria-label="Realce do texto"></label>
+                    <button type="button" data-note-command="removeFormat" aria-label="Limpar formatação" title="Limpar formatação">Tx</button>
+                  </div>
+                  <div id="student-lesson-notes-input" class="student-notes-editor" contenteditable="true" role="textbox" aria-multiline="true" aria-label="Anotações desta lição" data-placeholder="Escreva suas respostas, ideias ou dúvidas..." spellcheck="true"></div>
+                  <small id="student-lesson-notes-status" aria-live="polite">Salvamento automático</small>
+                </aside>
+              </div>
+            </section>
+           </section>
+
+          <section class="next-lesson" id="next-lesson" aria-labelledby="next-lesson-title">
+            <div class="next-lesson-icon" aria-hidden="true">♫</div>
+            <div class="next-lesson-copy"><p class="dashboard-eyebrow" data-i18n="nextLesson">PRÓXIMA AULA · 15 MIN</p><h2 id="next-lesson-title" data-i18n="lessonTitle">Apresentações e cumprimentos</h2><p data-i18n="lessonDescription">Aprenda a dizer olá, apresentar-se e iniciar uma conversa.</p></div>
+            <a class="lesson-link" href="#learning"><span data-i18n="viewTrack">Ver trilha</span> <span aria-hidden="true">→</span></a>
+          </section>
+
+          <footer class="dashboard-footer"><span data-i18n="footerMessage">Feito para acompanhar você em cada passo do aprendizado.</span> <strong>English School</strong></footer>
+        </div>
+      </section>
+    </main>
+
+    <dialog class="avatar-dialog" id="avatar-dialog" aria-labelledby="avatar-dialog-title">
+      <div class="avatar-dialog-header">
+        <div><p class="dashboard-eyebrow" data-i18n="avatarStudio">ESTÚDIO DO AVATAR</p><h2 id="avatar-dialog-title" data-i18n="customizeAvatar">Personalize seu personagem</h2></div>
+        <button class="dialog-close" id="close-avatar-dialog" type="button" aria-label="Fechar editor do avatar">×</button>
+      </div>
+      <div class="avatar-editor-body">
+        <div class="avatar-stage" id="avatar-stage" aria-label="Prévia do personagem"></div>
+        <p class="avatar-hint" data-i18n="avatarHint">Escolha seu visual e toque em uma emoção ou movimento.</p>
+        <div class="avatar-customizers">
+          <label for="avatar-skin" data-i18n="skinTone">Tom de pele</label><input id="avatar-skin" type="color" value="#d99b72" />
+          <label for="avatar-hair" data-i18n="hairColor">Cabelo</label><input id="avatar-hair" type="color" value="#392638" />
+          <label for="avatar-clothes" data-i18n="outfit">Roupa</label>
+          <select id="avatar-clothes" class="setting-select"><option value="tee" data-i18n="outfitTee">Camiseta</option><option value="hoodie" data-i18n="outfitHoodie">Moletom</option><option value="jacket" data-i18n="outfitJacket">Jaqueta</option></select>
+          <label for="avatar-clothing-color" data-i18n="clothingColor">Cor da roupa</label><input id="avatar-clothing-color" type="color" value="#8e58cc" />
+        </div>
+        <div class="avatar-actions" role="group" aria-label="Emoções e movimentos do avatar">
+          <button type="button" data-avatar-state="wave" data-i18n="avatarWave">Acenar</button>
+          <button type="button" data-avatar-state="dance" data-i18n="avatarDance">Dançar</button>
+          <button type="button" data-avatar-state="celebrate" data-i18n="avatarCelebrate">Comemorar</button>
+          <button type="button" data-avatar-state="angry" data-i18n="avatarAngry">Bravo</button>
+          <button type="button" data-avatar-state="sad" data-i18n="avatarSad">Triste</button>
+          <button type="button" data-avatar-state="sleepy" data-i18n="avatarSleepy">Com sono</button>
+          <button type="button" data-avatar-state="scared" data-i18n="avatarScared">Com medo</button>
+        </div>
+        <div class="avatar-photo-actions"><button type="button" id="choose-avatar-photo" data-i18n="chooseAvatarPhoto">Escolher foto em vez do personagem</button><button type="button" id="use-avatar-character" data-i18n="useCharacter">Usar personagem</button></div>
+      </div>
+      <div class="dialog-actions"><button class="save-settings" id="save-avatar-settings" type="button" data-i18n="saveAvatar">Salvar avatar</button></div>
+    </dialog>
+
+    <dialog class="profile-dialog feedback-dialog" id="feedback-dialog" aria-labelledby="feedback-dialog-title">
+      <form id="feedback-form">
+        <div class="dialog-header">
+          <div><p class="dashboard-eyebrow" data-i18n="feedbackEyebrow">SUA OPINIÃO</p><h2 id="feedback-dialog-title" data-i18n="feedbackTitle">Como está sendo sua experiência?</h2></div>
+          <button class="dialog-close" id="close-feedback-dialog" type="button" aria-label="Fechar formulário de feedback">×</button>
+        </div>
+        <div class="dialog-body">
+          <label class="setting-label" for="feedback-message" data-i18n="feedbackLabel">Conte o que está achando da página</label>
+          <textarea id="feedback-message" name="message" rows="5" maxlength="2000" required data-i18n-placeholder="feedbackPlaceholder" placeholder="Sua opinião ajuda a melhorar a página."></textarea>
+          <p class="form-message feedback-status" id="feedback-status" role="status" aria-live="polite"></p>
+        </div>
+        <div class="dialog-actions"><button class="save-settings" type="submit" data-i18n="sendFeedback">Enviar feedback</button></div>
+      </form>
+    </dialog>
+
+    <dialog class="profile-dialog" id="profile-dialog" aria-labelledby="profile-dialog-title">
+      <form method="dialog" class="dialog-header">
+        <div><p class="dashboard-eyebrow" data-i18n="personalize">PERSONALIZE</p><h2 id="profile-dialog-title" data-i18n="profileSettings">Configurações de perfil</h2></div>
+        <button class="dialog-close" type="submit" aria-label="Fechar configurações">×</button>
+      </form>
+      <div class="dialog-body">
+        <label class="setting-label" for="photo-upload" data-i18n="backgroundPhoto">Imagem de fundo</label>
+        <input id="photo-upload" type="file" accept="image/*" />
+
+        <label class="setting-label" for="accent-color" data-i18n="layoutColor">Cor do layout</label>
+        <div class="color-setting"><input id="accent-color" type="color" value="#8e58cc" /><span data-i18n="accentHint">Escolha a cor de destaque do painel.</span></div>
+
+        <label class="setting-label" for="background-style" data-i18n="backgroundStyle">Fundo do painel</label>
+        <select id="background-style" class="setting-select">
+          <option value="default" data-i18n="backgroundDefault">Clássico</option>
+          <option value="galaxy" data-i18n="backgroundGalaxy">Galáxia animada</option>
+          <option value="doodles" data-i18n="backgroundDoodles">Rabiscos ilustrados</option>
+          <option value="manga" data-i18n="backgroundManga">Mangá em alto contraste</option>
+          <option value="photo" data-i18n="backgroundPhotoOption">Imagem enviada</option>
+        </select>
+        <p class="settings-note" data-i18n="backgroundNote">Envie uma imagem para usá-la como fundo animado do painel. Clique no avatar para escolher a foto do perfil.</p>
+      </div>
+      <div class="dialog-actions">
+        <button class="reset-settings" id="reset-profile-settings" type="button" data-i18n="resetSettings">Restaurar padrão</button>
+        <button class="save-settings" id="save-profile-settings" type="button" data-i18n="saveSettings">Salvar preferências</button>
+      </div>
+    </dialog>
+
+    <input id="avatar-upload" type="file" accept="image/*" hidden aria-label="Escolher foto do perfil" />
+    <script src="api.js"></script>
+    <script src="script.js"></script>
+    <script src="teacher.js"></script>
+  </body>
+</html>

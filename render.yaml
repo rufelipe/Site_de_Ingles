@@ -1,0 +1,17 @@
+services:
+  - type: web
+    name: english-school
+    runtime: python
+    buildCommand: echo "Python standard library only"
+    startCommand: python backend/app.py
+    disk:
+      name: english-school-data
+      mountPath: /var/data
+      sizeGB: 1
+    envVars:
+      - key: DATABASE_PATH
+        value: /var/data/english-school.sqlite3
+      - key: SCHOOL_ADMIN_USERNAME
+        sync: false
+      - key: SCHOOL_ADMIN_PASSWORD
+        sync: false
