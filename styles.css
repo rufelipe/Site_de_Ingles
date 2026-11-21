@@ -2476,3 +2476,9 @@ body[data-background="galaxy"] .language-control {
   .game-student-profile { display: none; }
   .sidebar-xp-card { width: calc(100% - 20px); margin-left: 10px; margin-right: 10px; }
 }
+
+
+/* Botão Sair do aluno alinhado ao padrão do painel do professor */
+.dashboard-topbar .logout-button.topbar-logout { margin-left: 14px; padding: 9px 14px; border: 1px solid #e9e4ef; border-radius: 8px; color: #716b7c; background: #fff; font-size: 12px; font-weight: 700; }
+.dashboard-topbar .logout-button.topbar-logout:hover { background: #f4eff9; color: #7042a7; border-color: #e0d5ed; }
+@media (max-width: 620px) { .dashboard-topbar { gap: 8px; padding: 0 16px; } .dashboard-topbar .logout-button.topbar-logout { margin-left: 4px; padding: 8px 10px; } }
