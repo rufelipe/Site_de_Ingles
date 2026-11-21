@@ -58,9 +58,10 @@ function updateStudentGameProgressWidget() {
   };
   render();
   if (!currentStudentUsername) return;
+  const requestedUsername = currentStudentUsername;
   fetch('/api/games/content', { credentials: 'same-origin' })
     .then((response) => response.ok ? response.json() : null)
-    .then((data) => { if (data?.stats) render(data.stats); })
+    .then((data) => { if (data?.stats && currentStudentUsername === requestedUsername) render(data.stats); })
     .catch(() => {});
 }
 
