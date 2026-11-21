@@ -379,8 +379,10 @@ class AppHandler(BaseHTTPRequestHandler):
                     return self.send_json(403, {"error": "Área exclusiva do aluno."})
                 data = self.json_body()
                 mode = str(data.get("mode", "practice"))[:40]
-                correct = bool(data.get("correct", False))
-                xp_earned = max(0, min(50, int(data.get("xpEarned", 0)))) if correct else 0
+                if mode not in ("vocabulary", "grammar", "sentence", "translation", "question"):
+                    return self.send_json(400, {"error": "Tipo de jogo inválido."})
+                correct = data.get("correct") is True
+                xp_earned = (15 if mode in ("sentence", "translation", "question") else 10) if correct else 0
                 lesson_id = str(data.get("lessonId", "")).strip() or None
                 if lesson_id and not db.execute("SELECT id FROM lessons WHERE id=%s AND student_id=%s", (lesson_id, user["id"])).fetchone():
                     return self.send_json(403, {"error": "Lição não pertence a este aluno."})
