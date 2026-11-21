@@ -2493,3 +2493,12 @@ body[data-background="galaxy"] .language-control {
 @media (max-width: 620px) {
   .welcome-avatar-stack .sidebar-xp-card { width: min(210px, 55vw); padding: 10px; }
 }
+
+
+/* Arquivos anexados e histórico de ações das lições no painel do professor */
+.teacher-lesson { position: relative; }
+.teacher-lesson-files { margin-top: 6px; color: #7b7187; font-size: 12px; }
+.teacher-lesson-files a { color: #7042a7; text-decoration: underline; margin-right: 8px; }
+.teacher-more-button { min-width: 38px; padding: 5px 10px; font-size: 20px; line-height: 1; }
+.teacher-lesson-history { flex-basis: 100%; margin-top: 10px; padding: 12px 14px; border: 1px solid #e9e1f1; border-radius: 10px; background: #faf8fc; color: #51465e; font-size: 12px; }
+.teacher-lesson-history p { margin: 7px 0 0; }
