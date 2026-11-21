@@ -33,11 +33,13 @@ async function loadGameStudentProfile() {
 loadGameStudentProfile();
 let assignedLessonQuestions = [];
 let assignedLessonPhrases = [];
+let assignedLessonWritingChallenges = [];
 let currentGameQuestion = null;
 
 function buildQuestionsFromAssignedLessons(lessons) {
   const generated = [];
   assignedLessonPhrases = [];
+  assignedLessonWritingChallenges = [];
   (lessons || []).forEach((lesson) => {
     const sourceParts = [lesson.title, lesson.description, ...(lesson.notes || []).map((note) => note.content || ''), ...(lesson.attachments || []).map((file) => file.text || '')];
     const text = sourceParts.join('. ').replace(/<[^>]*>/g, ' ').replace(/&nbsp;/g, ' ');
@@ -53,6 +55,18 @@ function buildQuestionsFromAssignedLessons(lessons) {
         });
       }
       const words = sentence.match(/[A-Za-z][A-Za-z'-]{2,}/g) || [];
+      if (words.length >= 4 && words.length <= 16) {
+        assignedLessonWritingChallenges.push({
+          category: 'Listening · ' + (lesson.level || 'personalizado'),
+          prompt: 'Ouça a frase da sua lição e escreva em inglês.',
+          audioPrompt: sentence,
+          language: 'en-US',
+          answer: sentence,
+          accepted: [],
+          lessonId: lesson.id,
+          customLessonChallenge: true
+        });
+      }
       if (words.length < 4) return;
       const target = words[Math.min(words.length - 1, Math.max(1, Math.floor(words.length / 2)))];
       const choices = [...new Set([target, ...words.filter((word) => word.toLowerCase() !== target.toLowerCase())])].slice(0, 4);
@@ -377,14 +391,16 @@ function normalizeAnswer(text) {
 function renderWritingChallenge() {
   const progress = getProgress();
   const challenges = difficultyWritingChallenges[mode][progress.difficulty - 1];
-  const challenge = challenges[writingIndex % challenges.length];
+  const challengePool = assignedLessonWritingChallenges.length ? [...challenges, ...assignedLessonWritingChallenges] : challenges;
+  const challenge = challengePool[writingIndex % challengePool.length];
+  currentGameQuestion = challenge;
   const isTranslation = mode === 'translation';
   answered = false;
   rewardAmount.textContent = '+15';
   gameArea.innerHTML = `
     <div class="game-content">
       <span class="game-category">${challenge.category} · etapa ${progress.stage}/100</span>
-      <h3>${isTranslation ? 'Escreva ou fale a tradução' : 'Ouça e responda em inglês'}</h3>
+      <h3>${challenge.customLessonChallenge ? 'Ouça e escreva a frase da lição' : (isTranslation ? 'Escreva ou fale a tradução' : 'Ouça e responda em inglês')}</h3>
       <p class="question-hint">${challenge.prompt}</p>
       <div class="audio-actions">
         <button class="audio-button" id="playPrompt" type="button">🔊 Ouvir ${isTranslation ? 'frase' : 'pergunta'}</button>
