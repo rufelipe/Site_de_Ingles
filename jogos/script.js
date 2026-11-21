@@ -31,6 +31,76 @@ async function loadGameStudentProfile() {
 }
 
 loadGameStudentProfile();
+let assignedLessonQuestions = [];
+let currentGameQuestion = null;
+
+function buildQuestionsFromAssignedLessons(lessons) {
+  const generated = [];
+  (lessons || []).forEach((lesson) => {
+    const sourceParts = [lesson.title, lesson.description, ...(lesson.notes || []).map((note) => note.content || '')];
+    const text = sourceParts.join('. ').replace(/<[^>]*>/g, ' ').replace(/&nbsp;/g, ' ');
+    const sentences = text.split(/[.!?\n]+/).map((part) => part.replace(/\s+/g, ' ').trim()).filter((part) => part.length >= 18);
+    sentences.forEach((sentence) => {
+      const words = sentence.match(/[A-Za-z][A-Za-z'-]{2,}/g) || [];
+      if (words.length < 4) return;
+      const target = words[Math.min(words.length - 1, Math.max(1, Math.floor(words.length / 2)))];
+      const choices = [...new Set([target, ...words.filter((word) => word.toLowerCase() !== target.toLowerCase())])].slice(0, 4);
+      if (choices.length < 2) return;
+      const fallbacks = ['learn', 'practice', 'improve', 'understand'];
+      while (choices.length < 4) choices.push(fallbacks[choices.length - 1]);
+      const shuffled = choices.slice().sort(() => Math.random() - 0.5);
+      generated.push({
+        category: 'Sua lição · ' + (lesson.level || 'personalizado'),
+        prompt: 'Complete a frase da lição "' + lesson.title + '": ' + sentence.replace(target, '_____'),
+        choices: shuffled,
+        answer: target,
+        explanation: 'Esta palavra foi retirada do conteúdo da sua lição: ' + lesson.title + '.',
+        lessonId: lesson.id
+      });
+    });
+  });
+  return generated;
+}
+
+async function loadAssignedLessonContent() {
+  try {
+    const response = await fetch('../api/games/content', { credentials: 'same-origin' });
+    if (!response.ok) return;
+    const data = await response.json();
+    assignedLessonQuestions = buildQuestionsFromAssignedLessons(data.lessons || []);
+    if (data.stats) {
+      xp = Number(data.stats.xp) || 0;
+      correctAnswers = Number(data.stats.correct_answers) || 0;
+      streak = Number(data.stats.streak) || 0;
+      localStorage.setItem(storageKeys.xp, String(xp));
+      localStorage.setItem(storageKeys.answers, String(correctAnswers));
+      localStorage.setItem(storageKeys.streak, String(streak));
+      updateDashboard();
+    }
+    if (assignedLessonQuestions.length) {
+      const note = document.createElement('p');
+      note.className = 'section-note';
+      note.textContent = assignedLessonQuestions.length + ' desafios personalizados gerados a partir das suas lições.';
+      document.querySelector('.games-section .section-heading')?.appendChild(note);
+    }
+  } catch (error) {
+    console.warn('Não foi possível carregar o conteúdo das lições.', error);
+  }
+}
+
+async function saveGameAttempt(correct, points, lessonId = null) {
+  try {
+    await fetch('../api/games/attempts', {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ mode, correct, xpEarned: points, lessonId: lessonId || currentGameQuestion?.lessonId || null })
+    });
+  } catch (error) {
+    console.warn('Não foi possível sincronizar o progresso do jogo.', error);
+  }
+}
+
 
 const questionSets = {
   vocabulary: [
@@ -384,7 +454,9 @@ function checkWritingAnswer(challenge) {
 function renderQuiz() {
   const progress = getProgress();
   const set = difficultyQuestionSets[mode][progress.difficulty - 1];
-  const question = set[questionIndex % set.length];
+  const questionPool = assignedLessonQuestions.length ? [...set, ...assignedLessonQuestions] : set;
+  const question = questionPool[questionIndex % questionPool.length];
+  currentGameQuestion = question;
   answered = false;
   rewardAmount.textContent = '+10';
   gameArea.innerHTML = `
@@ -409,10 +481,12 @@ function checkQuizAnswer(button, question) {
     button.classList.add('correct');
     gameArea.querySelectorAll('.option-button').forEach((option) => { option.disabled = true; });
     award(10);
+    saveGameAttempt(true, 10, question.lessonId);
     feedback.className = 'feedback good';
     feedback.textContent = `Muito bem! ${question.explanation} +10 XP`;
     addNextButton();
   } else {
+    saveGameAttempt(false, 0, question.lessonId);
     button.classList.add('incorrect');
     button.disabled = true;
     feedback.className = 'feedback bad';
@@ -515,4 +589,4 @@ document.querySelectorAll('.game-card').forEach((card) => {
 });
 
 updateDashboard();
-renderQuiz();
+loadAssignedLessonContent().finally(() => renderQuiz());
