@@ -35,6 +35,29 @@ let pendingAvatar = '';
 let savedBackgroundPhoto = '';
 let pendingBackgroundPhoto = '';
 const settingsKey = 'english-school-student-settings';
+
+function updateStudentGameProgressWidget() {
+  const xp = Number(localStorage.getItem('linguaplay-xp')) || 0;
+  const answers = Number(localStorage.getItem('linguaplay-answers')) || 0;
+  const level = Math.floor(answers / 100) + 1;
+  const stage = (answers % 100) + 1;
+  const ranks = ['Iniciante', 'Explorador', 'Comunicador', 'Fluente'];
+  const rank = ranks[(level - 1) % ranks.length];
+  const xpEl = document.getElementById('sidebar-xp-value');
+  const levelEl = document.getElementById('sidebar-xp-level');
+  const rankEl = document.getElementById('sidebar-xp-rank');
+  const fillEl = document.getElementById('sidebar-xp-fill');
+  const card = document.getElementById('sidebar-xp-card');
+  if (!xpEl || !levelEl || !rankEl || !fillEl || !card) return;
+  xpEl.textContent = xp;
+  levelEl.textContent = level;
+  rankEl.textContent = rank;
+  fillEl.style.width = ((stage - 1) / 100 * 100) + '%';
+  const track = card.querySelector('.sidebar-xp-track');
+  if (track) track.setAttribute('aria-valuenow', String(stage - 1));
+}
+
+window.addEventListener('storage', updateStudentGameProgressWidget);
 document.body.dataset.role = selectedRole;
 
 const translations = {
@@ -203,6 +226,7 @@ try {
   applyPreferences({});
 }
 applyLanguage(currentLanguage);
+updateStudentGameProgressWidget();
 
 const assignedLessonsSection = document.getElementById('assigned-lessons-section');
 const assignedLessonsList = document.getElementById('assigned-lessons-list');
@@ -547,6 +571,7 @@ loginForm.addEventListener('submit', async (event) => {
     } catch { applyPreferences({}); }
     await showAssignedLessons(currentStudentUsername);
     applyLanguage(currentLanguage);
+    updateStudentGameProgressWidget();
     document.getElementById('dashboard-title').focus();
   } catch (error) {
     formMessage.textContent = error.message || 'Login ou senha incorretos.';
@@ -758,6 +783,7 @@ logoutButtons.forEach((button) => {
 
     roleDescription.textContent = 'Entre para continuar sua jornada de aprendizado.';
     helpNote.hidden = false;
+    updateStudentGameProgressWidget();
     loginInput.focus();
   });
 });
