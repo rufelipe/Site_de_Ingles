@@ -405,6 +405,7 @@ function normalizeAnswer(text) {
 }
 
 async function renderWritingChallenge() {
+  const progress = getProgress();
   let challenge;
   try {
     challenge = await fetchAiQuestion(mode);
@@ -513,6 +514,7 @@ function checkWritingAnswer(challenge) {
 }
 
 async function renderQuiz() {
+  const progress = getProgress();
   let question;
   try {
     question = await fetchAiQuestion(mode);
@@ -581,6 +583,7 @@ function addNextButton() {
 }
 
 async function renderPhrase() {
+  const progress = getProgress();
   let phrase;
   try {
     phrase = await fetchAiQuestion('sentence');
