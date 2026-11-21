@@ -4,7 +4,8 @@ import json
 import mimetypes
 import os
 import secrets
-import sqlite3
+import psycopg
+from psycopg.rows import dict_row
 import time
 import uuid
 from http import cookies
@@ -13,17 +14,15 @@ from pathlib import Path
 from urllib.parse import parse_qs, unquote, urlparse
 
 ROOT = Path(__file__).resolve().parent.parent
-DB_PATH = os.environ.get("DATABASE_PATH", str(ROOT / "english-school.sqlite3"))
+DATABASE_URL = os.environ.get("DATABASE_URL", "").strip()
 MAX_REQUEST_SIZE = 55 * 1024 * 1024
 SESSION_SECONDS = 60 * 60 * 24 * 7
 
 
 def connect():
-    Path(DB_PATH).parent.mkdir(parents=True, exist_ok=True)
-    db = sqlite3.connect(DB_PATH, timeout=30)
-    db.row_factory = sqlite3.Row
-    db.execute("PRAGMA foreign_keys = ON")
-    return db
+    if not DATABASE_URL:
+        raise RuntimeError("DATABASE_URL não configurada. Adicione a connection string do Neon nas variáveis do Render.")
+    return psycopg.connect(DATABASE_URL, row_factory=dict_row, connect_timeout=15)
 
 
 def initialize():
@@ -32,9 +31,9 @@ def initialize():
     if len(username) < 3 or len(password) < 12:
         raise RuntimeError("Configure SCHOOL_ADMIN_USERNAME e SCHOOL_ADMIN_PASSWORD (mínimo de 12 caracteres) no ambiente do serviço.")
     with connect() as db:
-        db.executescript("""
+        schema = """
             CREATE TABLE IF NOT EXISTS users (
-                id TEXT PRIMARY KEY, username TEXT NOT NULL UNIQUE COLLATE NOCASE,
+                id TEXT PRIMARY KEY, username TEXT NOT NULL,
                 name TEXT NOT NULL, role TEXT NOT NULL CHECK(role IN ('student','teacher','admin')),
                 password_hash TEXT NOT NULL, active INTEGER NOT NULL DEFAULT 1,
                 permissions TEXT NOT NULL DEFAULT '[]', cpf TEXT NOT NULL DEFAULT '', level TEXT NOT NULL DEFAULT '',
@@ -52,7 +51,7 @@ def initialize():
             CREATE TABLE IF NOT EXISTS attachments (
                 id TEXT PRIMARY KEY, lesson_id TEXT NOT NULL REFERENCES lessons(id) ON DELETE CASCADE,
                 name TEXT NOT NULL, mime_type TEXT NOT NULL, size INTEGER NOT NULL,
-                content BLOB NOT NULL, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+                content BYTEA NOT NULL, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
             );
             CREATE TABLE IF NOT EXISTS notes (
                 user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -75,15 +74,14 @@ def initialize():
                 event TEXT NOT NULL, value REAL NOT NULL DEFAULT 0,
                 created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
             );
-        """)
-        columns = {row[1] for row in db.execute("PRAGMA table_info(users)").fetchall()}
-        if "cpf" not in columns:
-            db.execute("ALTER TABLE users ADD COLUMN cpf TEXT NOT NULL DEFAULT ''")
-        if "level" not in columns:
-            db.execute("ALTER TABLE users ADD COLUMN level TEXT NOT NULL DEFAULT ''")
-        existing = db.execute("SELECT id FROM users WHERE username = ?", (username,)).fetchone()
+        """
+        for statement in schema.split(";"):
+            if statement.strip():
+                db.execute(statement)
+        db.execute("CREATE UNIQUE INDEX IF NOT EXISTS users_username_lower_idx ON users (LOWER(username))")
+        existing = db.execute("SELECT id FROM users WHERE LOWER(username) = LOWER(%s)", (username,)).fetchone()
         if not existing:
-            db.execute("INSERT INTO users(id,username,name,role,password_hash,permissions) VALUES(?,?,?,?,?,?)", (
+            db.execute("INSERT INTO users(id,username,name,role,password_hash,permissions) VALUES(%s,%s,%s,%s,%s,%s)", (
                 uuid.uuid4().hex, username, username, "admin", hash_password(password), json.dumps(["students", "lessons", "reports", "feedback", "team"])
             ))
 
@@ -143,7 +141,7 @@ class AppHandler(BaseHTTPRequestHandler):
             return None
         token_hash = hashlib.sha256(morsel.value.encode()).hexdigest()
         row = db.execute("""SELECT u.* FROM sessions s JOIN users u ON u.id=s.user_id
-                           WHERE s.token_hash=? AND s.expires_at>? AND u.active=1""", (token_hash, int(time.time()))).fetchone()
+                           WHERE s.token_hash=%s AND s.expires_at>%s AND u.active=1""", (token_hash, int(time.time()))).fetchone()
         return row
 
     def require_user(self, db):
@@ -209,12 +207,12 @@ class AppHandler(BaseHTTPRequestHandler):
                 username = str(data.get("username", "")).strip()
                 password = str(data.get("password", ""))
                 role = str(data.get("role", ""))
-                row = db.execute("SELECT * FROM users WHERE username=? COLLATE NOCASE", (username,)).fetchone()
+                row = db.execute("SELECT * FROM users WHERE username=%s", (username,)).fetchone()
                 if not row or not row["active"] or not check_password(password, row["password_hash"]) or (role and role not in (row["role"], "professor" if row["role"] in ("teacher", "admin") else "aluno")):
                     return self.send_json(401, {"error": "Login ou senha incorretos."})
                 token = secrets.token_urlsafe(48)
                 expiry = int(time.time()) + SESSION_SECONDS
-                db.execute("INSERT INTO sessions(token_hash,user_id,expires_at) VALUES(?,?,?)", (hashlib.sha256(token.encode()).hexdigest(), row["id"], expiry))
+                db.execute("INSERT INTO sessions(token_hash,user_id,expires_at) VALUES(%s,%s,%s)", (hashlib.sha256(token.encode()).hexdigest(), row["id"], expiry))
                 secure = "; Secure" if os.environ.get("RENDER") else ""
                 return self.send_json(200, {"user": user_json(row)}, {"Set-Cookie": f"school_session={token}; Path=/; HttpOnly; SameSite=Lax; Max-Age={SESSION_SECONDS}{secure}"})
 
@@ -223,7 +221,7 @@ class AppHandler(BaseHTTPRequestHandler):
                 if user:
                     jar = cookies.SimpleCookie(self.headers.get("Cookie", ""))
                     token_hash = hashlib.sha256(jar["school_session"].value.encode()).hexdigest()
-                    db.execute("DELETE FROM sessions WHERE token_hash=?", (token_hash,))
+                    db.execute("DELETE FROM sessions WHERE token_hash=%s", (token_hash,))
                 return self.send_json(200, {"ok": True}, {"Set-Cookie": "school_session=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0"})
 
             if path == "/api/auth/me" and method == "GET":
@@ -257,43 +255,43 @@ class AppHandler(BaseHTTPRequestHandler):
                     return self.send_json(400, {"error": "Informe nome, usuário válido, senha de ao menos 8 caracteres e perfil aluno ou professor."})
                 new_id = uuid.uuid4().hex
                 try:
-                    db.execute("INSERT INTO users(id,username,name,role,password_hash,permissions,cpf,level) VALUES(?,?,?,?,?,?,?,?)",
+                    db.execute("INSERT INTO users(id,username,name,role,password_hash,permissions,cpf,level) VALUES(%s,%s,%s,%s,%s,%s,%s,%s)",
                                (new_id, username, name, role, hash_password(password), json.dumps(data.get("permissions", [])), str(data.get("cpf", "")).strip(), str(data.get("level", "")).strip()))
-                except sqlite3.IntegrityError:
+                except psycopg.IntegrityError:
                     return self.send_json(409, {"error": "Este nome de usuário já está cadastrado."})
-                return self.send_json(201, {"user": user_json(db.execute("SELECT * FROM users WHERE id=?", (new_id,)).fetchone())})
+                return self.send_json(201, {"user": user_json(db.execute("SELECT * FROM users WHERE id=%s", (new_id,)).fetchone())})
 
             if len(parts) == 3 and parts[1] == "users" and method in ("PATCH", "DELETE"):
                 target_id = parts[2]
-                target = db.execute("SELECT * FROM users WHERE id=? AND role!='admin'", (target_id,)).fetchone()
+                target = db.execute("SELECT * FROM users WHERE id=%s AND role!='admin'", (target_id,)).fetchone()
                 if user["role"] != "admin":
                     if "students" not in json.loads(user["permissions"]) or not target or target["role"] != "student":
                         return self.send_json(403, {"error": "Acesso negado."})
                 if not target:
                     return self.send_json(404, {"error": "Usuário não encontrado."})
                 if method == "DELETE":
-                    db.execute("DELETE FROM users WHERE id=?", (target_id,))
+                    db.execute("DELETE FROM users WHERE id=%s", (target_id,))
                     return self.send_json(200, {"ok": True})
                 data = self.json_body()
                 fields, values = [], []
                 for key in ("name", "username", "active", "cpf", "level"):
                     if key in data:
-                        fields.append(key + "=?")
+                        fields.append(key + "=%s")
                         values.append(int(bool(data[key])) if key == "active" else str(data[key]).strip())
                 if data.get("password"):
                     if len(str(data["password"])) < 8:
                         return self.send_json(400, {"error": "A senha deve ter ao menos 8 caracteres."})
-                    fields.append("password_hash=?")
+                    fields.append("password_hash=%s")
                     values.append(hash_password(str(data["password"])))
                 if "permissions" in data:
-                    fields.append("permissions=?")
+                    fields.append("permissions=%s")
                     values.append(json.dumps(data["permissions"]))
                 if fields:
                     try:
-                        db.execute("UPDATE users SET " + ",".join(fields) + " WHERE id=?", (*values, target_id))
-                    except sqlite3.IntegrityError:
+                        db.execute("UPDATE users SET " + ",".join(fields) + " WHERE id=%s", (*values, target_id))
+                    except psycopg.IntegrityError:
                         return self.send_json(409, {"error": "Este nome de usuário já está em uso."})
-                return self.send_json(200, {"user": user_json(db.execute("SELECT * FROM users WHERE id=?", (target_id,)).fetchone())})
+                return self.send_json(200, {"user": user_json(db.execute("SELECT * FROM users WHERE id=%s", (target_id,)).fetchone())})
 
             if path == "/api/account" and method == "PATCH":
                 data = self.json_body()
@@ -303,30 +301,30 @@ class AppHandler(BaseHTTPRequestHandler):
                 username = str(data.get("username", user["username"])).strip()
                 if len(username) < 3:
                     return self.send_json(400, {"error": "O usuário deve ter ao menos 3 caracteres."})
-                fields.append("username=?")
+                fields.append("username=%s")
                 values.append(username)
                 new_password = str(data.get("password", ""))
                 if new_password:
                     if len(new_password) < 8:
                         return self.send_json(400, {"error": "A nova senha deve ter ao menos 8 caracteres."})
-                    fields.append("password_hash=?")
+                    fields.append("password_hash=%s")
                     values.append(hash_password(new_password))
                 try:
-                    db.execute("UPDATE users SET " + ",".join(fields) + " WHERE id=?", (*values, user["id"]))
-                except sqlite3.IntegrityError:
+                    db.execute("UPDATE users SET " + ",".join(fields) + " WHERE id=%s", (*values, user["id"]))
+                except psycopg.IntegrityError:
                     return self.send_json(409, {"error": "Este usuário já está em uso."})
-                return self.send_json(200, {"user": user_json(db.execute("SELECT * FROM users WHERE id=?", (user["id"],)).fetchone())})
+                return self.send_json(200, {"user": user_json(db.execute("SELECT * FROM users WHERE id=%s", (user["id"],)).fetchone())})
 
             if path == "/api/lessons" and method == "GET":
                 if user["role"] == "student":
-                    lessons = db.execute("SELECT * FROM lessons WHERE student_id=? ORDER BY created_at DESC", (user["id"],)).fetchall()
+                    lessons = db.execute("SELECT * FROM lessons WHERE student_id=%s ORDER BY created_at DESC", (user["id"],)).fetchall()
                 else:
                     lessons = db.execute("SELECT l.*,u.name AS student_name,u.username FROM lessons l JOIN users u ON u.id=l.student_id ORDER BY l.created_at DESC").fetchall()
                 result = []
                 for lesson in lessons:
                     item = dict(lesson)
                     item["completed"] = bool(item["completed"])
-                    item["attachments"] = [dict(row) for row in db.execute("SELECT id,name,mime_type AS type,size FROM attachments WHERE lesson_id=? ORDER BY created_at", (item["id"],))]
+                    item["attachments"] = [dict(row) for row in db.execute("SELECT id,name,mime_type AS type,size FROM attachments WHERE lesson_id=%s ORDER BY created_at", (item["id"],))]
                     result.append(item)
                 return self.send_json(200, {"lessons": result})
 
@@ -337,20 +335,20 @@ class AppHandler(BaseHTTPRequestHandler):
                 data = self.json_body()
                 student_ids = data.get("studentIds", [data.get("studentId", "")])
                 title = str(data.get("title", "")).strip()
-                students = [db.execute("SELECT id FROM users WHERE id=? AND role='student' AND active=1", (sid,)).fetchone() for sid in student_ids]
+                students = [db.execute("SELECT id FROM users WHERE id=%s AND role='student' AND active=1", (sid,)).fetchone() for sid in student_ids]
                 students = [student for student in students if student]
                 if not title or not students:
                     return self.send_json(400, {"error": "Informe o título e pelo menos um aluno válido."})
                 created = []
                 for student in students:
                     lesson_id = uuid.uuid4().hex
-                    db.execute("INSERT INTO lessons(id,student_id,title,level,release_day) VALUES(?,?,?,?,?)", (lesson_id, student["id"], title, str(data.get("level", "")), int(data.get("releaseDay", 0))))
+                    db.execute("INSERT INTO lessons(id,student_id,title,level,release_day) VALUES(%s,%s,%s,%s,%s)", (lesson_id, student["id"], title, str(data.get("level", "")), int(data.get("releaseDay", 0))))
                     created.append(lesson_id)
                 return self.send_json(201, {"lessonIds": created})
 
             if len(parts) == 3 and parts[1] == "lessons" and method in ("PATCH", "DELETE"):
                 lesson_id = parts[2]
-                lesson = db.execute("SELECT * FROM lessons WHERE id=?", (lesson_id,)).fetchone()
+                lesson = db.execute("SELECT * FROM lessons WHERE id=%s", (lesson_id,)).fetchone()
                 if not lesson:
                     return self.send_json(404, {"error": "Lição não encontrada."})
                 if user["role"] == "student" and lesson["student_id"] != user["id"]:
@@ -359,21 +357,21 @@ class AppHandler(BaseHTTPRequestHandler):
                     staff = self.require_staff(db, user)
                     if not staff:
                         return
-                    db.execute("DELETE FROM lessons WHERE id=?", (lesson_id,))
+                    db.execute("DELETE FROM lessons WHERE id=%s", (lesson_id,))
                     return self.send_json(200, {"ok": True})
                 staff = self.require_staff(db, user)
                 if not staff:
                     return
                 data = self.json_body()
                 if "completed" in data:
-                    db.execute("UPDATE lessons SET completed=? WHERE id=?", (int(bool(data["completed"])), lesson_id))
+                    db.execute("UPDATE lessons SET completed=%s WHERE id=%s", (int(bool(data["completed"])), lesson_id))
                 return self.send_json(200, {"ok": True})
 
             if len(parts) == 4 and parts[1] == "lessons" and parts[3] == "files" and method == "POST":
                 staff = self.require_staff(db, user)
                 if not staff:
                     return
-                lesson = db.execute("SELECT id FROM lessons WHERE id=?", (parts[2],)).fetchone()
+                lesson = db.execute("SELECT id FROM lessons WHERE id=%s", (parts[2],)).fetchone()
                 if not lesson:
                     return self.send_json(404, {"error": "Lição não encontrada."})
                 content = self.body()
@@ -383,35 +381,35 @@ class AppHandler(BaseHTTPRequestHandler):
                 name = params.get("name", ["arquivo"])[0][:255]
                 mime = self.headers.get("Content-Type", "application/octet-stream")[:120]
                 file_id = uuid.uuid4().hex
-                db.execute("INSERT INTO attachments(id,lesson_id,name,mime_type,size,content) VALUES(?,?,?,?,?,?)", (file_id, parts[2], name, mime, len(content), sqlite3.Binary(content)))
+                db.execute("INSERT INTO attachments(id,lesson_id,name,mime_type,size,content) VALUES(%s,%s,%s,%s,%s,%s)", (file_id, parts[2], name, mime, len(content), content))
                 return self.send_json(201, {"attachment": {"id": file_id, "name": name, "type": mime, "size": len(content)}})
 
             if len(parts) == 4 and parts[1] == "lessons" and parts[3] == "notes" and method in ("GET", "PUT"):
                 lesson_id = parts[2]
-                lesson = db.execute("SELECT student_id FROM lessons WHERE id=?", (lesson_id,)).fetchone()
+                lesson = db.execute("SELECT student_id FROM lessons WHERE id=%s", (lesson_id,)).fetchone()
                 if not lesson:
                     return self.send_json(404, {"error": "Lição não encontrada."})
                 if user["role"] == "student" and lesson["student_id"] != user["id"]:
                     return self.send_json(403, {"error": "Acesso negado."})
                 if method == "GET":
                     file_id = query.get("fileId", [""])[0]
-                    row = db.execute("SELECT content,updated_at FROM notes WHERE user_id=? AND lesson_id=? AND attachment_id=?", (user["id"], lesson_id, file_id)).fetchone()
+                    row = db.execute("SELECT content,updated_at FROM notes WHERE user_id=%s AND lesson_id=%s AND attachment_id=%s", (user["id"], lesson_id, file_id)).fetchone()
                     return self.send_json(200, {"content": row["content"] if row else "", "updatedAt": row["updated_at"] if row else None})
                 data = self.json_body()
                 content = str(data.get("content", ""))
                 if len(content) > 500000:
                     return self.send_json(400, {"error": "As anotações excedem o limite permitido."})
                 file_id = str(data.get("fileId", ""))
-                if file_id and not db.execute("SELECT id FROM attachments WHERE id=? AND lesson_id=?", (file_id, lesson_id)).fetchone():
+                if file_id and not db.execute("SELECT id FROM attachments WHERE id=%s AND lesson_id=%s", (file_id, lesson_id)).fetchone():
                     return self.send_json(400, {"error": "Arquivo não pertence a esta lição."})
-                db.execute("""INSERT INTO notes(user_id,lesson_id,attachment_id,content,updated_at) VALUES(?,?,?,?,CURRENT_TIMESTAMP)
+                db.execute("""INSERT INTO notes(user_id,lesson_id,attachment_id,content,updated_at) VALUES(%s,%s,%s,%s,CURRENT_TIMESTAMP)
                              ON CONFLICT(user_id,lesson_id,attachment_id) DO UPDATE SET content=excluded.content,updated_at=CURRENT_TIMESTAMP""",
                            (user["id"], lesson_id, file_id, content))
                 return self.send_json(200, {"saved": True})
 
             if len(parts) == 4 and parts[1] == "files" and parts[3] == "content" and method == "GET":
                 file_id = parts[2]
-                row = db.execute("SELECT a.*,l.student_id FROM attachments a JOIN lessons l ON l.id=a.lesson_id WHERE a.id=?", (file_id,)).fetchone()
+                row = db.execute("SELECT a.*,l.student_id FROM attachments a JOIN lessons l ON l.id=a.lesson_id WHERE a.id=%s", (file_id,)).fetchone()
                 if not row:
                     return self.send_json(404, {"error": "Arquivo não encontrado."})
                 if user["role"] == "student" and row["student_id"] != user["id"]:
@@ -432,7 +430,7 @@ class AppHandler(BaseHTTPRequestHandler):
                 if not message or len(message) > 2000:
                     return self.send_json(400, {"error": "O feedback deve ter entre 1 e 2000 caracteres."})
                 feedback_id = uuid.uuid4().hex
-                db.execute("INSERT INTO feedback(id,user_id,message) VALUES(?,?,?)", (feedback_id, user["id"], message))
+                db.execute("INSERT INTO feedback(id,user_id,message) VALUES(%s,%s,%s)", (feedback_id, user["id"], message))
                 return self.send_json(201, {"id": feedback_id})
 
             if path == "/api/feedback" and method == "GET":
@@ -443,13 +441,13 @@ class AppHandler(BaseHTTPRequestHandler):
 
             if path == "/api/settings" and method in ("GET", "PUT"):
                 if method == "GET":
-                    row = db.execute("SELECT settings FROM profile_settings WHERE user_id=?", (user["id"],)).fetchone()
+                    row = db.execute("SELECT settings FROM profile_settings WHERE user_id=%s", (user["id"],)).fetchone()
                     return self.send_json(200, {"settings": json.loads(row["settings"]) if row else {}})
                 settings = self.json_body()
                 serialized = json.dumps(settings, ensure_ascii=False)
                 if len(serialized) > 5_000_000:
                     return self.send_json(400, {"error": "As configurações excedem o limite."})
-                db.execute("""INSERT INTO profile_settings(user_id,settings) VALUES(?,?)
+                db.execute("""INSERT INTO profile_settings(user_id,settings) VALUES(%s,%s)
                              ON CONFLICT(user_id) DO UPDATE SET settings=excluded.settings,updated_at=CURRENT_TIMESTAMP""", (user["id"], serialized))
                 return self.send_json(200, {"saved": True})
 
@@ -458,9 +456,9 @@ class AppHandler(BaseHTTPRequestHandler):
                 if user["role"] == "student" and progress_user_id != user["id"]:
                     return self.send_json(403, {"error": "Acesso negado."})
                 if user["role"] in ("teacher", "admin"):
-                    if not db.execute("SELECT id FROM users WHERE id=? AND role='student'", (progress_user_id,)).fetchone():
+                    if not db.execute("SELECT id FROM users WHERE id=%s AND role='student'", (progress_user_id,)).fetchone():
                         return self.send_json(404, {"error": "Aluno não encontrado."})
-                rows = db.execute("SELECT id,lesson_id,event,value,created_at FROM progress WHERE user_id=? ORDER BY created_at", (progress_user_id,)).fetchall()
+                rows = db.execute("SELECT id,lesson_id,event,value,created_at FROM progress WHERE user_id=%s ORDER BY created_at", (progress_user_id,)).fetchall()
                 return self.send_json(200, {"progress": [dict(row) for row in rows]})
             if path == "/api/progress" and method == "POST":
                 data = self.json_body()
@@ -468,10 +466,10 @@ class AppHandler(BaseHTTPRequestHandler):
                 if not event:
                     return self.send_json(400, {"error": "Informe o evento de progresso."})
                 lesson_id = data.get("lessonId") or None
-                if lesson_id and not db.execute("SELECT id FROM lessons WHERE id=? AND student_id=?", (lesson_id, user["id"])).fetchone() and user["role"] == "student":
+                if lesson_id and not db.execute("SELECT id FROM lessons WHERE id=%s AND student_id=%s", (lesson_id, user["id"])).fetchone() and user["role"] == "student":
                     return self.send_json(403, {"error": "Acesso negado."})
                 progress_id = uuid.uuid4().hex
-                db.execute("INSERT INTO progress(id,user_id,lesson_id,event,value) VALUES(?,?,?,?,?)", (progress_id, user["id"], lesson_id, event, float(data.get("value", 0))))
+                db.execute("INSERT INTO progress(id,user_id,lesson_id,event,value) VALUES(%s,%s,%s,%s,%s)", (progress_id, user["id"], lesson_id, event, float(data.get("value", 0))))
                 return self.send_json(201, {"id": progress_id})
 
             return self.send_json(404, {"error": "Rota não encontrada."})
