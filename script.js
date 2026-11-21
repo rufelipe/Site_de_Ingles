@@ -143,7 +143,7 @@ function applyLanguage(language) {
   document.querySelector('.logout-button').setAttribute('aria-label', translations[language].logout);
   document.querySelector('.logout-button').title = translations[language].logout;
   document.querySelector('[data-i18n="helloRudson"]').textContent = `${language === 'en' ? 'Hello' : 'Olá'}, ${currentStudentName}`;
-  document.querySelector('.profile-details strong').textContent = currentStudentName;
+  document.querySelector('.profile-details strong').textContent = currentStudentName.trim().split(/\\s+/)[0] || currentStudentName;
   document.querySelector('.profile-settings-button').setAttribute('aria-label', language === 'en' ? 'Open profile settings' : 'Abrir configurações de perfil');
   avatarElements.forEach((avatar) => avatar.setAttribute('aria-label', language === 'en' ? 'Customize avatar' : 'Personalizar avatar'));
   const flag = document.getElementById('language-flag');
