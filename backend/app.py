@@ -1,4 +1,5 @@
 import hashlib
+import io
 import hmac
 import json
 import mimetypes
@@ -8,6 +9,8 @@ import psycopg
 from psycopg.rows import dict_row
 import time
 import uuid
+import zipfile
+import xml.etree.ElementTree as ET
 from http import cookies
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -102,6 +105,30 @@ def initialize():
             db.execute("INSERT INTO users(id,username,name,role,password_hash,permissions) VALUES(%s,%s,%s,%s,%s,%s)", (
                 uuid.uuid4().hex, username, username, "admin", hash_password(password), json.dumps(["students", "lessons", "reports", "feedback", "team"])
             ))
+
+
+def extract_attachment_text(name, mime_type, content):
+    filename = str(name or "").lower()
+    mime = str(mime_type or "").lower()
+    try:
+        if mime.startswith("text/") or filename.endswith((".txt", ".md", ".csv")):
+            return content.decode("utf-8", errors="ignore")[:12000]
+        if filename.endswith(".docx"):
+            with zipfile.ZipFile(io.BytesIO(content)) as archive:
+                xml_data = archive.read("word/document.xml")
+            root = ET.fromstring(xml_data)
+            ns = {"w": "http://schemas.openxmlformats.org/wordprocessingml/2006/main"}
+            return " ".join(node.text or "" for node in root.findall(".//w:t", ns))[:12000]
+        if filename.endswith(".pdf") or mime == "application/pdf":
+            try:
+                from pypdf import PdfReader
+                reader = PdfReader(io.BytesIO(content))
+                return "\n".join((page.extract_text() or "") for page in reader.pages[:40])[:12000]
+            except Exception as error:
+                print("PDF text extraction unavailable:", repr(error))
+    except Exception as error:
+        print("Attachment text extraction failed:", repr(error))
+    return ""
 
 
 def hash_password(password, salt=None):
@@ -342,7 +369,7 @@ class AppHandler(BaseHTTPRequestHandler):
                     lesson_item = dict(lesson_row)
                     lesson_item["completed"] = bool(lesson_item["completed"])
                     lesson_item["notes"] = [dict(note) for note in db.execute("SELECT content FROM notes WHERE user_id=%s AND lesson_id=%s AND content<>'' ORDER BY updated_at", (user["id"], lesson_item["id"])).fetchall()]
-                    lesson_item["attachments"] = [dict(file_row) for file_row in db.execute("SELECT id,name,mime_type AS type FROM attachments WHERE lesson_id=%s ORDER BY created_at", (lesson_item["id"],)).fetchall()]
+                    lesson_item["attachments"] = [{"id": file_row["id"], "name": file_row["name"], "type": file_row["type"], "text": extract_attachment_text(file_row["name"], file_row["type"], file_row["content"])} for file_row in db.execute("SELECT id,name,mime_type AS type,content FROM attachments WHERE lesson_id=%s ORDER BY created_at", (lesson_item["id"],)).fetchall()]
                     lessons_payload.append(lesson_item)
                 stats = db.execute("SELECT xp,correct_answers,streak,last_active FROM game_stats WHERE user_id=%s", (user["id"],)).fetchone()
                 return self.send_json(200, {"lessons": lessons_payload, "stats": dict(stats) if stats else {"xp": 0, "correct_answers": 0, "streak": 0, "last_active": ""}})
