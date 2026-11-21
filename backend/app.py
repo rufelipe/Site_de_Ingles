@@ -333,6 +333,50 @@ class AppHandler(BaseHTTPRequestHandler):
                     return self.send_json(409, {"error": "Este usuário já está em uso."})
                 return self.send_json(200, {"user": user_json(db.execute("SELECT * FROM users WHERE id=%s", (user["id"],)).fetchone())})
 
+            if path == "/api/games/content" and method == "GET":
+                if user["role"] != "student":
+                    return self.send_json(403, {"error": "Área exclusiva do aluno."})
+                lesson_rows = db.execute("SELECT id,title,description,level,completed,created_at FROM lessons WHERE student_id=%s ORDER BY created_at ASC", (user["id"],)).fetchall()
+                lessons_payload = []
+                for lesson_row in lesson_rows:
+                    lesson_item = dict(lesson_row)
+                    lesson_item["completed"] = bool(lesson_item["completed"])
+                    lesson_item["notes"] = [dict(note) for note in db.execute("SELECT content FROM notes WHERE user_id=%s AND lesson_id=%s AND content<>'' ORDER BY updated_at", (user["id"], lesson_item["id"])).fetchall()]
+                    lesson_item["attachments"] = [dict(file_row) for file_row in db.execute("SELECT id,name,mime_type AS type FROM attachments WHERE lesson_id=%s ORDER BY created_at", (lesson_item["id"],)).fetchall()]
+                    lessons_payload.append(lesson_item)
+                stats = db.execute("SELECT xp,correct_answers,streak,last_active FROM game_stats WHERE user_id=%s", (user["id"],)).fetchone()
+                return self.send_json(200, {"lessons": lessons_payload, "stats": dict(stats) if stats else {"xp": 0, "correct_answers": 0, "streak": 0, "last_active": ""}})
+
+            if path == "/api/games/attempts" and method == "POST":
+                if user["role"] != "student":
+                    return self.send_json(403, {"error": "Área exclusiva do aluno."})
+                data = self.json_body()
+                mode = str(data.get("mode", "practice"))[:40]
+                correct = bool(data.get("correct", False))
+                xp_earned = max(0, min(50, int(data.get("xpEarned", 0)))) if correct else 0
+                lesson_id = str(data.get("lessonId", "")).strip() or None
+                if lesson_id and not db.execute("SELECT id FROM lessons WHERE id=%s AND student_id=%s", (lesson_id, user["id"])).fetchone():
+                    return self.send_json(403, {"error": "Lição não pertence a este aluno."})
+                today = time.strftime("%Y-%m-%d")
+                stats = db.execute("SELECT xp,correct_answers,streak,last_active FROM game_stats WHERE user_id=%s", (user["id"],)).fetchone()
+                if stats:
+                    old_streak = int(stats["streak"])
+                    last_active = stats["last_active"] or ""
+                    if last_active != today:
+                        yesterday = time.strftime("%Y-%m-%d", time.localtime(time.time() - 86400))
+                        streak = old_streak + 1 if last_active == yesterday else 1
+                    else:
+                        streak = old_streak
+                    xp_total = int(stats["xp"]) + xp_earned
+                    answers_total = int(stats["correct_answers"]) + (1 if correct else 0)
+                    db.execute("UPDATE game_stats SET xp=%s,correct_answers=%s,streak=%s,last_active=%s,updated_at=CURRENT_TIMESTAMP WHERE user_id=%s", (xp_total, answers_total, streak, today, user["id"]))
+                else:
+                    xp_total, answers_total, streak = xp_earned, (1 if correct else 0), (1 if correct else 0)
+                    db.execute("INSERT INTO game_stats(user_id,xp,correct_answers,streak,last_active) VALUES(%s,%s,%s,%s,%s)", (user["id"], xp_total, answers_total, streak, today if correct else ""))
+                attempt_id = uuid.uuid4().hex
+                db.execute("INSERT INTO game_attempts(id,user_id,lesson_id,game_mode,correct,xp_earned) VALUES(%s,%s,%s,%s,%s,%s)", (attempt_id, user["id"], lesson_id, mode, int(correct), xp_earned))
+                return self.send_json(201, {"saved": True, "stats": {"xp": xp_total, "correct_answers": answers_total, "streak": streak}})
+
             if path == "/api/lessons" and method == "GET":
                 if user["role"] == "student":
                     lessons = db.execute("SELECT * FROM lessons WHERE student_id=%s ORDER BY created_at DESC", (user["id"],)).fetchall()
