@@ -438,6 +438,8 @@ class AppHandler(BaseHTTPRequestHandler):
                 if not sources:
                     return self.send_json(422, {"error": "Não encontrei texto extraível nos PDFs das suas lições. PDFs digitalizados precisam de OCR."})
                 source_row, source_text = min(sources, key=lambda item: db.execute("SELECT COUNT(*) AS total FROM ai_game_questions WHERE user_id=%s AND lesson_id=%s AND mode=%s", (user["id"], item[0]["id"], mode)).fetchone()["total"])
+                if not os.environ.get("GEMINI_API_KEY", "").strip():
+                    return self.send_json(503, {"error": "A IA ainda não foi configurada no servidor. O administrador precisa adicionar GEMINI_API_KEY no Render."})
                 last_error = None
                 for _ in range(3):
                     try:
