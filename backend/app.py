@@ -178,6 +178,11 @@ def generate_gemini_game_question(source_text, mode, lesson_title, level):
             raise ValueError("A IA retornou uma frase inválida.")
         question["words"] = question.get("words") or question["answer"][:]
     question["customLessonChallenge"] = True
+    question.setdefault("category", "Atividade personalizada · PDF")
+    question.setdefault("explanation", "Resposta baseada no conteúdo do PDF da sua lição.")
+    question.setdefault("accepted", [])
+    question.setdefault("audioPrompt", question.get("prompt", ""))
+    question.setdefault("language", "en-US" if mode == "question" else "pt-BR")
     return question
 
 def hash_password(password, salt=None):
@@ -439,7 +444,8 @@ class AppHandler(BaseHTTPRequestHandler):
                         question = generate_gemini_game_question(source_text, mode, source_row["title"], source_row["level"])
                         question["lessonId"] = source_row["id"]
                         serialized = json.dumps(question, ensure_ascii=False, sort_keys=True)
-                        fingerprint = hashlib.sha256(" ".join(serialized.lower().split()).encode("utf-8")).hexdigest()
+                        fingerprint_source = str(question.get("prompt", "")) + "|" + json.dumps(question.get("answer", ""), ensure_ascii=False, sort_keys=True)
+                        fingerprint = hashlib.sha256(" ".join(fingerprint_source.lower().split()).encode("utf-8")).hexdigest()
                         question_id = uuid.uuid4().hex
                         inserted = db.execute("""INSERT INTO ai_game_questions(id,user_id,lesson_id,mode,fingerprint,payload)
                             VALUES(%s,%s,%s,%s,%s,%s) ON CONFLICT(user_id,mode,fingerprint) DO NOTHING RETURNING id""",
