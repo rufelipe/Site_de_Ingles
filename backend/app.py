@@ -4,6 +4,7 @@ import hmac
 import json
 import mimetypes
 import os
+import random
 import secrets
 import psycopg
 from psycopg.rows import dict_row
@@ -173,10 +174,14 @@ def generate_gemini_game_question(source_text, mode, lesson_title, level):
         choices = question.get("choices")
         if not isinstance(choices, list) or len(choices) != 4 or question.get("answer") not in choices:
             raise ValueError("A IA retornou alternativas inválidas.")
+        random.shuffle(choices)
     if mode == "sentence":
         if not isinstance(question.get("answer"), list) or len(question["answer"]) < 4:
             raise ValueError("A IA retornou uma frase inválida.")
         question["words"] = question.get("words") or question["answer"][:]
+        if sorted(question["words"]) != sorted(question["answer"]):
+            question["words"] = question["answer"][:]
+        random.shuffle(question["words"])
     question["customLessonChallenge"] = True
     question.setdefault("category", "Atividade personalizada · PDF")
     question.setdefault("explanation", "Resposta baseada no conteúdo do PDF da sua lição.")
