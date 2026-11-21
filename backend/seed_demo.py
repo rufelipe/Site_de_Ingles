@@ -24,35 +24,49 @@ db = sqlite3.connect(DB_PATH)
 db.execute("PRAGMA foreign_keys = ON")
 
 students = [
-    ("demo.aluno.a1", "Ana Demo", "Iniciante"),
-    ("demo.aluno.a2", "Bruno Demo", "Básico"),
-    ("demo.aluno.b1", "Carla Demo", "Intermediário"),
+    ("demo.aluno.01", "Ana Demo", "Iniciante"),
+    ("demo.aluno.02", "Bruno Demo", "Básico"),
+    ("demo.aluno.03", "Carla Demo", "Intermediário"),
+    ("demo.aluno.04", "Diego Demo", "Básico"),
+    ("demo.aluno.05", "Elisa Demo", "Intermediário"),
+    ("demo.aluno.06", "Felipe Demo", "Avançado"),
+    ("demo.aluno.07", "Gabriela Demo", "Iniciante"),
+    ("demo.aluno.08", "Henrique Demo", "Básico"),
+    ("demo.aluno.09", "Isabela Demo", "Intermediário"),
+    ("demo.aluno.10", "João Demo", "Avançado"),
 ]
-
-for username, name, level in students:
-    row = db.execute("SELECT id FROM users WHERE username=? COLLATE NOCASE", (username,)).fetchone()
-    if not row:
-        user_id = uuid.uuid4().hex
-        db.execute(
-            "INSERT INTO users(id,username,name,role,password_hash,permissions,cpf,level) VALUES(?,?,?,?,?,?,?,?)",
-            (user_id, username, name, "student", hash_password(DEMO_PASSWORD), "[]", "", level),
-        )
-    else:
-        user_id = row[0]
 
 lesson_templates = [
     ("A1", "Introductions and personal information", "reading", 55),
     ("A1", "Everyday routines and present simple", "grammar", 68),
     ("A1", "Shopping and prices", "listening", 72),
     ("A1", "Short messages and forms", "writing", 80),
+    ("A1", "Daily activities vocabulary", "vocabulary", 64),
+    ("A1", "Talking about family", "speaking", 70),
+    ("A1", "Days, dates and schedules", "listening", 73),
+    ("A1", "Basic questions and answers", "grammar", 66),
+    ("A1", "Describing people and places", "reading", 78),
     ("A2", "Travel plans and directions", "speaking", 62),
     ("A2", "Home and neighbourhood vocabulary", "vocabulary", 76),
     ("A2", "Past events and simple stories", "reading", 71),
     ("A2", "Workplace conversations", "listening", 64),
+    ("A2", "Appointments and arrangements", "speaking", 74),
+    ("A2", "Writing a short personal email", "writing", 69),
+    ("A2", "Comparatives and everyday choices", "grammar", 77),
+    ("A2", "Food, restaurants and requests", "listening", 72),
+    ("A2", "Shopping problems and solutions", "speaking", 61),
+    ("A2", "Describing experiences", "reading", 75),
+    ("A2", "Useful phrasal verbs", "vocabulary", 68),
     ("B1", "Giving opinions and reasons", "speaking", 58),
     ("B1", "Connected texts and email writing", "writing", 73),
     ("B1", "News and everyday discussions", "listening", 67),
     ("B1", "Grammar in real-world communication", "grammar", 81),
+    ("B1", "Work and career vocabulary", "vocabulary", 79),
+    ("B1", "Presenting ideas clearly", "speaking", 65),
+    ("B1", "Reading for main ideas and detail", "reading", 74),
+    ("B1", "Writing structured paragraphs", "writing", 70),
+    ("B1", "Listening for key information", "listening", 63),
+    ("B1", "Review and mixed skills challenge", "grammar", 82),
 ]
 
 source_notes = {
