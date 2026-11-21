@@ -39,7 +39,7 @@ function buildQuestionsFromAssignedLessons(lessons) {
   const generated = [];
   assignedLessonPhrases = [];
   (lessons || []).forEach((lesson) => {
-    const sourceParts = [lesson.title, lesson.description, ...(lesson.notes || []).map((note) => note.content || '')];
+    const sourceParts = [lesson.title, lesson.description, ...(lesson.notes || []).map((note) => note.content || ''), ...(lesson.attachments || []).map((file) => file.text || '')];
     const text = sourceParts.join('. ').replace(/<[^>]*>/g, ' ').replace(/&nbsp;/g, ' ');
     const sentences = text.split(/[.!?\n]+/).map((part) => part.replace(/\s+/g, ' ').trim()).filter((part) => part.length >= 18);
     sentences.forEach((sentence) => {
