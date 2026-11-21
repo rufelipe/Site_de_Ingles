@@ -1,3 +1,35 @@
+async function loadGameStudentProfile() {
+  const nameEl = document.getElementById('game-student-name');
+  const avatarEl = document.getElementById('game-avatar');
+  if (!nameEl || !avatarEl) return;
+  try {
+    const [meResult, settingsResult] = await Promise.all([
+      fetch('../api/auth/me', { credentials: 'same-origin' }),
+      fetch('../api/settings', { credentials: 'same-origin' })
+    ]);
+    if (!meResult.ok) return;
+    const me = await meResult.json();
+    const settings = settingsResult.ok ? (await settingsResult.json()).settings || {} : {};
+    nameEl.textContent = me.user?.name || me.user?.username || 'Aluno';
+    if (settings.avatar) {
+      avatarEl.textContent = '';
+      avatarEl.style.backgroundImage = 'url("' + settings.avatar.replace(/"/g, '%22') + '")';
+      avatarEl.classList.add('has-photo');
+    } else {
+      const style = settings.avatarStyle || {};
+      avatarEl.textContent = (me.user?.name || me.user?.username || 'A').trim().charAt(0).toUpperCase();
+      avatarEl.style.setProperty('--avatar-skin', style.skin || '#d99b72');
+      avatarEl.style.setProperty('--avatar-hair', style.hair || '#392638');
+      avatarEl.style.setProperty('--avatar-clothes', style.clothes || '#8e58cc');
+      avatarEl.classList.add('generated');
+    }
+  } catch {
+    nameEl.textContent = 'Aluno';
+  }
+}
+
+loadGameStudentProfile();
+
 const questionSets = {
   vocabulary: [
     { category: 'Vocabulário · cotidiano', prompt: 'O que significa “cozy”?', choices: ['Aconchegante', 'Barulhento', 'Distante', 'Apimentado'], answer: 'Aconchegante', explanation: 'Cozy descreve um lugar confortável e acolhedor.' },
