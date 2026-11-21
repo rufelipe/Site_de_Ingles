@@ -522,7 +522,9 @@ class AppHandler(BaseHTTPRequestHandler):
                     item["attachments"] = [dict(row) for row in db.execute("SELECT id,name,mime_type AS type,size FROM attachments WHERE lesson_id=%s ORDER BY created_at", (item["id"],))]
                     item["history"] = [dict(row) for row in db.execute("SELECT action,actor_name,created_at FROM lesson_audit WHERE lesson_id=%s ORDER BY created_at DESC", (item["id"],))]
                     result.append(item)
-                return self.send_json(200, {"lessons": result})
+                audit_rows = db.execute("""SELECT a.*,u.name AS student_name FROM lesson_audit a
+                    LEFT JOIN users u ON u.id=a.student_id ORDER BY a.created_at DESC LIMIT 200""").fetchall()
+                return self.send_json(200, {"lessons": result, "history": [dict(row) for row in audit_rows]})
 
             if path == "/api/lessons" and method == "POST":
                 staff = self.require_staff(db, user)
