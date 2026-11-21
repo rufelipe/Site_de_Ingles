@@ -80,18 +80,53 @@
       const completion = total ? Math.round((completed / total) * 100) : 0;
       const progressValues = selectedProgress.filter((item) => Number.isFinite(Number(item.value))).map((item) => Number(item.value));
       const avg = progressValues.length ? Math.round(progressValues.reduce((sum, value) => sum + value, 0) / progressValues.length) : 0;
-      const skillEvents = selectedProgress.filter((item) => /skill|reading|listening|speaking|writing|grammar|vocabulary/i.test(item.event));
       const skillNames = ['reading', 'listening', 'speaking', 'writing', 'grammar', 'vocabulary'];
+      const skillLabels = { reading: 'Reading', listening: 'Listening', speaking: 'Speaking', writing: 'Writing', grammar: 'Grammar', vocabulary: 'Vocabulary' };
       const skillBars = skillNames.map((skill) => {
-        const values = skillEvents.filter((item) => item.event.toLowerCase().includes(skill)).map((item) => Number(item.value));
+        const values = selectedProgress.filter((item) => item.event.toLowerCase().includes(skill)).map((item) => Number(item.value)).filter(Number.isFinite);
         const score = values.length ? Math.max(0, Math.min(100, Math.round(values.reduce((sum, value) => sum + value, 0) / values.length))) : 0;
-        return `<div class="teacher-progress-row"><div><span>${skill}</span><strong>${score}%</strong></div><div class="teacher-progress-track"><span style="width:${score}%"></span></div></div>`;
+        return `<div class="teacher-progress-row"><div><span>${skillLabels[skill]}</span><strong>${score}%</strong></div><div class="teacher-progress-track"><span style="width:${score}%"></span></div></div>`;
       }).join('');
-      return `<div class="teacher-page-intro"><div><p class="teacher-kicker">ACOMPANHAMENTO</p><h1 class="teacher-heading">Resultados dos alunos</h1><p class="teacher-muted">Progresso baseado nas lições concluídas e nos eventos registrados pelo aluno.</p></div></div>
-      <article class="teacher-card"><label class="teacher-field">Aluno<select data-action="open-student"><option value="">Selecione um aluno</option>${students.map((s) => `<option value="${esc(s.id)}" ${selectedStudent === s.id ? 'selected' : ''}>${esc(s.name)}</option>`).join('')}</select></label></article>
-      ${selectedStudent ? `<div class="teacher-grid teacher-stats-grid"><article class="teacher-card teacher-stat-card"><p class="teacher-muted">Lições</p><strong class="teacher-stat">${total}</strong></article><article class="teacher-card teacher-stat-card"><p class="teacher-muted">Concluídas</p><strong class="teacher-stat">${completed}</strong></article><article class="teacher-card teacher-stat-card"><p class="teacher-muted">Conclusão</p><strong class="teacher-stat">${completion}%</strong></article><article class="teacher-card teacher-stat-card"><p class="teacher-muted">Média dos eventos</p><strong class="teacher-stat">${avg}%</strong></article></div>
+
+      const dated = selectedProgress.filter((item) => Number.isFinite(Number(item.value))).slice().sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+      const monthly = {};
+      dated.forEach((item) => {
+        const date = new Date(item.created_at);
+        if (Number.isNaN(date.getTime())) return;
+        const key = date.toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' });
+        if (!monthly[key]) monthly[key] = [];
+        monthly[key].push(Number(item.value));
+      });
+      const trend = Object.entries(monthly).slice(-6).map(([label, values]) => {
+        const value = Math.round(values.reduce((sum, n) => sum + n, 0) / values.length);
+        return `<div class="teacher-chart-col"><div class="teacher-chart-value">${value}%</div><div class="teacher-chart-bar" style="height:${Math.max(8, value)}%"></div><small>${esc(label)}</small></div>`;
+      }).join('') || '<p class="teacher-empty">Ainda não há histórico suficiente para a evolução.</p>';
+
+      const level = students.find((student) => student.id === selectedStudent)?.level || '—';
+      const difficultSkills = skillNames.map((skill) => {
+        const values = selectedProgress.filter((item) => item.event.toLowerCase().includes(skill)).map((item) => Number(item.value)).filter(Number.isFinite);
+        return { skill, score: values.length ? Math.round(values.reduce((sum, value) => sum + value, 0) / values.length) : null };
+      }).filter((item) => item.score !== null).sort((a, b) => a.score - b.score);
+      const weak = difficultSkills[0];
+      const strong = difficultSkills[difficultSkills.length - 1];
+      const recommendation = weak && weak.score < 70
+        ? `Reforçar ${skillLabels[weak.skill]} antes de avançar. ${skillLabels[weak.skill]} está em ${weak.score}%.`
+        : strong ? `Desempenho equilibrado. ${skillLabels[strong.skill]} é o principal ponto forte, com ${strong.score}%.` : 'Registre atividades de progresso para gerar recomendações.';
+
+      return `<div class="teacher-page-intro"><div><p class="teacher-kicker">ACOMPANHAMENTO PEDAGÓGICO</p><h1 class="teacher-heading">Resultados dos alunos</h1><p class="teacher-muted">Visão consolidada de evolução, habilidades e conclusão das atividades.</p></div></div>
+      <article class="teacher-card"><label class="teacher-field">Aluno<select data-action="open-student"><option value="">Selecione um aluno</option>${students.map((s) => `<option value="${esc(s.id)}" ${selectedStudent === s.id ? 'selected' : ''}>${esc(s.name)} · ${esc(s.level || '—')}</option>`).join('')}</select></label></article>
+      ${selectedStudent ? `
+      <div class="teacher-grid teacher-stats-grid">
+        <article class="teacher-card teacher-stat-card"><p class="teacher-muted">Nível</p><strong class="teacher-stat teacher-stat-small">${esc(level)}</strong></article>
+        <article class="teacher-card teacher-stat-card"><p class="teacher-muted">Lições</p><strong class="teacher-stat">${total}</strong></article>
+        <article class="teacher-card teacher-stat-card"><p class="teacher-muted">Concluídas</p><strong class="teacher-stat">${completed}</strong></article>
+        <article class="teacher-card teacher-stat-card"><p class="teacher-muted">Conclusão</p><strong class="teacher-stat">${completion}%</strong></article>
+        <article class="teacher-card teacher-stat-card"><p class="teacher-muted">Média</p><strong class="teacher-stat">${avg}%</strong></article>
+      </div>
+      <article class="teacher-card"><h2>Evolução do desempenho</h2><div class="teacher-chart" aria-label="Evolução mensal">${trend}</div></article>
       <article class="teacher-card"><h2>Domínio por habilidade</h2>${skillBars}</article>
-      <article class="teacher-card"><h2>Lições</h2>${studentLessons.map((lesson) => `<div class="teacher-lesson">${esc(lesson.title)} — ${lesson.completed ? 'Concluída' : 'Pendente'}</div>`).join('') || '<p class="teacher-empty">Nenhuma lição atribuída.</p>'}</article>` : '<article class="teacher-card"><p>Escolha um aluno para consultar o progresso.</p></article>'}`;
+      <article class="teacher-card"><h2>Recomendação pedagógica</h2><p class="teacher-recommendation">${esc(recommendation)}</p></article>
+      <article class="teacher-card"><h2>Histórico de lições</h2>${studentLessons.map((lesson) => `<div class="teacher-lesson">${esc(lesson.title)} — ${lesson.completed ? 'Concluída' : 'Pendente'}</div>`).join('') || '<p class="teacher-empty">Nenhuma lição atribuída.</p>'}</article>` : '<article class="teacher-card"><p>Escolha um aluno para consultar o progresso.</p></article>'}`;
     }
     if (tab === 'feedback') return `<div class="teacher-page-intro"><div><h1 class="teacher-heading">Feedbacks</h1></div><button class="teacher-button secondary" data-action="refresh">Atualizar</button></div>${feedback.map((item) => `<article class="teacher-card"><strong>${esc(item.name || item.username)}</strong><p>${esc(item.message)}</p><small>${esc(item.created_at)}</small></article>`).join('') || '<p class="teacher-empty">Ainda não há feedbacks.</p>'}`;
     if (tab === 'team') return `<div class="teacher-page-intro"><div><h1 class="teacher-heading">Professores</h1></div></div>${isAdmin() ? `<article class="teacher-card"><h2>Criar perfil de professor</h2><form class="teacher-form" data-action="create-teacher"><label class="teacher-field">Nome<input name="name" required></label><label class="teacher-field">Usuário<input name="username" required minlength="3"></label><label class="teacher-field">Senha<input name="password" type="password" required minlength="8"></label>${permissions.map(([key, label]) => `<label><input type="checkbox" name="permissions" value="${key}"> ${label}</label>`).join('')}<button class="teacher-button" type="submit">Criar professor</button></form></article>` : ''}${teachers.map((teacher) => `<article class="teacher-card"><strong>${esc(teacher.name)} · ${esc(teacher.username)}</strong><form class="teacher-form" data-action="permissions" data-id="${esc(teacher.id)}">${permissions.map(([key, label]) => `<label><input type="checkbox" name="permissions" value="${key}" ${(teacher.permissions || []).includes(key) ? 'checked' : ''}> ${label}</label>`).join('')}<button class="teacher-button" type="submit">Salvar permissões</button><button class="teacher-button secondary" type="button" data-action="edit-password" data-id="${esc(teacher.id)}">Alterar senha</button><button class="teacher-button danger" type="button" data-action="delete-user" data-id="${esc(teacher.id)}">Excluir</button></form></article>`).join('')}`;
