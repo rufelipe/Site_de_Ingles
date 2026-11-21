@@ -101,12 +101,24 @@ async function loadAssignedLessonContent() {
 
 async function saveGameAttempt(correct, points, lessonId = null) {
   try {
-    await fetch('../api/games/attempts', {
+    const response = await fetch('../api/games/attempts', {
       method: 'POST',
       credentials: 'same-origin',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ mode, correct, xpEarned: points, lessonId: lessonId || currentGameQuestion?.lessonId || null })
     });
+    if (response.ok) {
+      const result = await response.json();
+      if (result.stats) {
+        xp = Number(result.stats.xp) || 0;
+        correctAnswers = Number(result.stats.correct_answers) || 0;
+        streak = Number(result.stats.streak) || 0;
+        localStorage.setItem(storageKeys.xp, String(xp));
+        localStorage.setItem(storageKeys.answers, String(correctAnswers));
+        localStorage.setItem(storageKeys.streak, String(streak));
+        updateDashboard();
+      }
+    }
   } catch (error) {
     console.warn('Não foi possível sincronizar o progresso do jogo.', error);
   }
@@ -281,10 +293,10 @@ function getProgress() {
   return { level: Math.floor(correctAnswers / 100) + 1, stage, difficulty: Math.floor((stage - 1) / 20) + 1 };
 }
 const storageKeys = { xp: 'linguaplay-xp', answers: 'linguaplay-answers', streak: 'linguaplay-streak', active: 'linguaplay-last-active' };
-const savedNumber = (key) => Number(localStorage.getItem(key)) || 0;
-let xp = savedNumber(storageKeys.xp);
-let correctAnswers = savedNumber(storageKeys.answers);
-let streak = savedNumber(storageKeys.streak);
+// O servidor é a fonte de verdade; não reutilizamos XP local entre contas diferentes.
+let xp = 0;
+let correctAnswers = 0;
+let streak = 0;
 let mode = 'vocabulary';
 let questionIndex = 0;
 let phraseIndex = 0;
