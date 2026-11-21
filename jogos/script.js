@@ -45,6 +45,12 @@ let assignedLessonQuestions = [];
 let assignedLessonPhrases = [];
 let assignedLessonWritingChallenges = [];
 let currentGameQuestion = null;
+async function fetchAiQuestion(gameMode) {
+  const response = await fetch('../api/games/next-question?mode=' + encodeURIComponent(gameMode), { credentials: 'same-origin' });
+  const result = await response.json();
+  if (!response.ok) throw new Error(result.error || 'Não foi possível gerar uma atividade personalizada.');
+  return result.question;
+}
 
 function buildQuestionsFromAssignedLessons(lessons) {
   const generated = [];
@@ -129,7 +135,7 @@ async function saveGameAttempt(correct, points, lessonId = null) {
       method: 'POST',
       credentials: 'same-origin',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ mode, correct, xpEarned: points, lessonId: lessonId || currentGameQuestion?.lessonId || null })
+      body: JSON.stringify({ mode, correct, xpEarned: points, lessonId: lessonId || currentGameQuestion?.lessonId || null, questionId: currentGameQuestion?.questionId || null })
     });
     if (response.ok) {
       const result = await response.json();
@@ -398,11 +404,16 @@ function normalizeAnswer(text) {
     .trim().replace(/\s+/g, ' ');
 }
 
-function renderWritingChallenge() {
-  const progress = getProgress();
-  const challenges = difficultyWritingChallenges[mode][progress.difficulty - 1];
-  const challengePool = assignedLessonWritingChallenges.length ? [...challenges, ...assignedLessonWritingChallenges] : challenges;
-  const challenge = challengePool[writingIndex % challengePool.length];
+async function renderWritingChallenge() {
+  let challenge;
+  try {
+    challenge = await fetchAiQuestion(mode);
+    currentGameQuestion = challenge;
+  } catch (error) {
+    gameArea.innerHTML = '<div class="game-content"><h3>Atividade personalizada indisponível</h3><p class="question-hint">' + escapeGameText(error.message) + '</p><button class="next-button" type="button" id="retryAiQuestion">Tentar novamente</button></div>';
+    document.getElementById('retryAiQuestion')?.addEventListener('click', renderWritingChallenge);
+    return;
+  }
   currentGameQuestion = challenge;
   const isTranslation = mode === 'translation';
   answered = false;
@@ -501,11 +512,16 @@ function checkWritingAnswer(challenge) {
   }
 }
 
-function renderQuiz() {
-  const progress = getProgress();
-  const set = difficultyQuestionSets[mode][progress.difficulty - 1];
-  const questionPool = assignedLessonQuestions.length ? [...set, ...assignedLessonQuestions] : set;
-  const question = questionPool[questionIndex % questionPool.length];
+async function renderQuiz() {
+  let question;
+  try {
+    question = await fetchAiQuestion(mode);
+    currentGameQuestion = question;
+  } catch (error) {
+    gameArea.innerHTML = '<div class="game-content"><h3>Atividade personalizada indisponível</h3><p class="question-hint">' + escapeGameText(error.message) + '</p><p>Peça ao professor para verificar o PDF anexado à sua lição.</p><button class="next-button" type="button" id="retryAiQuestion">Tentar novamente</button></div>';
+    document.getElementById('retryAiQuestion')?.addEventListener('click', renderQuiz);
+    return;
+  }
   currentGameQuestion = question;
   answered = false;
   rewardAmount.textContent = '+10';
@@ -564,11 +580,16 @@ function addNextButton() {
   gameArea.querySelector('.game-content').appendChild(button);
 }
 
-function renderPhrase() {
-  const progress = getProgress();
-  const set = difficultyPhrases[progress.difficulty - 1];
-  const phrasePool = assignedLessonPhrases.length ? [...set, ...assignedLessonPhrases] : set;
-  const phrase = phrasePool[phraseIndex % phrasePool.length];
+async function renderPhrase() {
+  let phrase;
+  try {
+    phrase = await fetchAiQuestion('sentence');
+    currentGameQuestion = phrase;
+  } catch (error) {
+    gameArea.innerHTML = '<div class="game-content"><h3>Atividade personalizada indisponível</h3><p class="question-hint">' + escapeGameText(error.message) + '</p><button class="next-button" type="button" id="retryAiQuestion">Tentar novamente</button></div>';
+    document.getElementById('retryAiQuestion')?.addEventListener('click', renderPhrase);
+    return;
+  }
   currentGameQuestion = phrase;
   selectedWords = [];
   answered = false;
