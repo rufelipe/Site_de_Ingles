@@ -11,7 +11,7 @@ async function loadGameStudentProfile() {
     const me = await meResult.json();
     const settings = settingsResult.ok ? (await settingsResult.json()).settings || {} : {};
     const fullName = me.user?.name || me.user?.username || 'Aluno';
-    const firstName = fullName.trim().split(/\\s+/)[0] || 'Aluno';
+    const firstName = fullName.trim().split(/\s+/)[0] || 'Aluno';
     nameEl.textContent = firstName;
     if (settings.avatar) {
       avatarEl.textContent = '';
