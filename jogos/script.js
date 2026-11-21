@@ -31,6 +31,16 @@ async function loadGameStudentProfile() {
 }
 
 loadGameStudentProfile();
+function escapeGameText(value) {
+  return String(value ?? '').replace(/[&<>"']/g, (character) => ({
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#39;'
+  })[character]);
+}
+
 let assignedLessonQuestions = [];
 let assignedLessonPhrases = [];
 let assignedLessonWritingChallenges = [];
@@ -540,7 +550,7 @@ function addNextButton() {
   button.textContent = mode === 'sentence' ? 'Próxima frase →' : 'Próximo desafio →';
   button.addEventListener('click', () => {
     if (mode === 'sentence') {
-      phraseIndex = (phraseIndex + 1) % phrases.length;
+      phraseIndex += 1;
       selectedWords = [];
       renderPhrase();
     } else if (mode === 'translation' || mode === 'question') {
@@ -617,7 +627,7 @@ function checkPhrase(phrase) {
 
 document.querySelectorAll('.game-card').forEach((card) => {
   card.addEventListener('click', () => {
-    document.querySelector('.game-card.active').classList.remove('active');
+    document.querySelector('.game-card.active')?.classList.remove('active');
     card.classList.add('active');
     mode = card.dataset.mode;
     questionIndex = 0;
