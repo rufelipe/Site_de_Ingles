@@ -454,7 +454,13 @@ class AppHandler(BaseHTTPRequestHandler):
                 return self.send_json(200, {"saved": True})
 
             if path == "/api/progress" and method == "GET":
-                rows = db.execute("SELECT id,lesson_id,event,value,created_at FROM progress WHERE user_id=? ORDER BY created_at", (user["id"],)).fetchall()
+                progress_user_id = (query.get("userId") or [user["id"]])[0]
+                if user["role"] == "student" and progress_user_id != user["id"]:
+                    return self.send_json(403, {"error": "Acesso negado."})
+                if user["role"] in ("teacher", "admin"):
+                    if not db.execute("SELECT id FROM users WHERE id=? AND role='student'", (progress_user_id,)).fetchone():
+                        return self.send_json(404, {"error": "Aluno não encontrado."})
+                rows = db.execute("SELECT id,lesson_id,event,value,created_at FROM progress WHERE user_id=? ORDER BY created_at", (progress_user_id,)).fetchall()
                 return self.send_json(200, {"progress": [dict(row) for row in rows]})
             if path == "/api/progress" and method == "POST":
                 data = self.json_body()
