@@ -32,15 +32,26 @@ async function loadGameStudentProfile() {
 
 loadGameStudentProfile();
 let assignedLessonQuestions = [];
+let assignedLessonPhrases = [];
 let currentGameQuestion = null;
 
 function buildQuestionsFromAssignedLessons(lessons) {
   const generated = [];
+  assignedLessonPhrases = [];
   (lessons || []).forEach((lesson) => {
     const sourceParts = [lesson.title, lesson.description, ...(lesson.notes || []).map((note) => note.content || '')];
     const text = sourceParts.join('. ').replace(/<[^>]*>/g, ' ').replace(/&nbsp;/g, ' ');
     const sentences = text.split(/[.!?\n]+/).map((part) => part.replace(/\s+/g, ' ').trim()).filter((part) => part.length >= 18);
     sentences.forEach((sentence) => {
+      const phraseWords = sentence.match(/\S+/g) || [];
+      if (phraseWords.length >= 4 && phraseWords.length <= 18) {
+        assignedLessonPhrases.push({
+          prompt: 'Organize a frase da lição "' + lesson.title + '":',
+          answer: phraseWords,
+          words: phraseWords.slice().sort(() => Math.random() - 0.5),
+          lessonId: lesson.id
+        });
+      }
       const words = sentence.match(/[A-Za-z][A-Za-z'-]{2,}/g) || [];
       if (words.length < 4) return;
       const target = words[Math.min(words.length - 1, Math.max(1, Math.floor(words.length / 2)))];
@@ -481,7 +492,6 @@ function checkQuizAnswer(button, question) {
     button.classList.add('correct');
     gameArea.querySelectorAll('.option-button').forEach((option) => { option.disabled = true; });
     award(10);
-    saveGameAttempt(true, 10, question.lessonId);
     feedback.className = 'feedback good';
     feedback.textContent = `Muito bem! ${question.explanation} +10 XP`;
     addNextButton();
@@ -518,7 +528,9 @@ function addNextButton() {
 function renderPhrase() {
   const progress = getProgress();
   const set = difficultyPhrases[progress.difficulty - 1];
-  const phrase = set[phraseIndex % set.length];
+  const phrasePool = assignedLessonPhrases.length ? [...set, ...assignedLessonPhrases] : set;
+  const phrase = phrasePool[phraseIndex % phrasePool.length];
+  currentGameQuestion = phrase;
   selectedWords = [];
   answered = false;
   rewardAmount.textContent = '+15';
