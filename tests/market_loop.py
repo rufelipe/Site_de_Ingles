@@ -49,6 +49,33 @@ def main():
                 for path in ("/api/auth/me", "/api/users", "/api/lessons", "/api/progress"):
                     status, _, _ = request(path, cookie=cookie)
                     checks.append((path, status == 200))
+                if MUTATIONS:
+                    unique = f"loop.test.{int(time.time())}"
+                    status, _, created_user = request("/api/users", "POST", {
+                        "name": "Loop Test",
+                        "username": unique,
+                        "password": "LoopTest123!",
+                        "role": "student",
+                        "level": "Básico",
+                    }, cookie=cookie)
+                    checks.append(("create-test-user", status == 201))
+                    test_user_id = (created_user.get("user") or {}).get("id")
+                    if test_user_id:
+                        status, _, created_lesson = request("/api/lessons", "POST", {
+                            "studentIds": [test_user_id],
+                            "title": "[LOOP TEST] Smoke lesson",
+                            "level": "A2",
+                            "releaseDay": 0,
+                        }, cookie=cookie)
+                        checks.append(("create-test-lesson", status == 201))
+                        lesson_id = (created_lesson.get("lessonIds") or [None])[0]
+                        if lesson_id:
+                            status, _, _ = request(f"/api/lessons/{lesson_id}", "PATCH", {"completed": True}, cookie=cookie)
+                            checks.append(("complete-test-lesson", status == 200))
+                            status, _, _ = request(f"/api/lessons/{lesson_id}", "DELETE", cookie=cookie)
+                            checks.append(("delete-test-lesson", status == 200))
+                        status, _, _ = request(f"/api/users/{test_user_id}", "DELETE", cookie=cookie)
+                        checks.append(("delete-test-user", status == 200))
             failed = [name for name, ok in checks if not ok]
             print(f"[loop {iteration}/{ITERATIONS}] OK={len(failed)==0} falhas={failed}")
         except Exception as exc:
