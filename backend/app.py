@@ -78,6 +78,24 @@ def initialize():
         for statement in schema.split(";"):
             if statement.strip():
                 db.execute(statement)
+        db.execute("ALTER TABLE lessons ADD COLUMN IF NOT EXISTS description TEXT NOT NULL DEFAULT ''")
+        db.execute("""CREATE TABLE IF NOT EXISTS game_stats (
+            user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+            xp INTEGER NOT NULL DEFAULT 0,
+            correct_answers INTEGER NOT NULL DEFAULT 0,
+            streak INTEGER NOT NULL DEFAULT 0,
+            last_active TEXT NOT NULL DEFAULT '',
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )""")
+        db.execute("""CREATE TABLE IF NOT EXISTS game_attempts (
+            id TEXT PRIMARY KEY,
+            user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            lesson_id TEXT REFERENCES lessons(id) ON DELETE SET NULL,
+            game_mode TEXT NOT NULL,
+            correct INTEGER NOT NULL DEFAULT 0,
+            xp_earned INTEGER NOT NULL DEFAULT 0,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )""")
         db.execute("CREATE UNIQUE INDEX IF NOT EXISTS users_username_lower_idx ON users (LOWER(username))")
         existing = db.execute("SELECT id FROM users WHERE LOWER(username) = LOWER(%s)", (username,)).fetchone()
         if not existing:
@@ -342,7 +360,7 @@ class AppHandler(BaseHTTPRequestHandler):
                 created = []
                 for student in students:
                     lesson_id = uuid.uuid4().hex
-                    db.execute("INSERT INTO lessons(id,student_id,title,level,release_day) VALUES(%s,%s,%s,%s,%s)", (lesson_id, student["id"], title, str(data.get("level", "")), int(data.get("releaseDay", 0))))
+                    db.execute("INSERT INTO lessons(id,student_id,title,description,level,release_day) VALUES(%s,%s,%s,%s,%s,%s)", (lesson_id, student["id"], title, str(data.get("description", "")).strip()[:12000], str(data.get("level", "")), int(data.get("releaseDay", 0))))
                     created.append(lesson_id)
                 return self.send_json(201, {"lessonIds": created})
 
