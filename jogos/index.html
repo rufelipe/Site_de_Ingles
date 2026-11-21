@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#10152b" />
+    <title>LinguaPlay — Aprenda inglês jogando</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <a class="brand" href="#inicio" aria-label="LinguaPlay, início">
+        <span class="brand-mark">L</span>
+        <span>lingua<span class="brand-accent">play</span></span>
+      </a>
+      <nav aria-label="Navegação principal">
+        <a href="#jogos">Jogos</a>
+        <a href="#progresso">Meu progresso</a>
+      </nav>
+      <a class="profile-pill" href="#progresso"><span class="profile-icon">✦</span> Minha jornada</a>
+    </header>
+
+    <main id="inicio">
+      <section class="hero">
+        <div class="hero-copy">
+          <span class="eyebrow"><span class="live-dot"></span> SEU ESPAÇO DE APRENDIZADO</span>
+          <h1>Inglês fica melhor<br />quando vira <span>jogo.</span></h1>
+          <p>Pratique um pouco todos os dias, ganhe experiência e avance no seu ritmo. Ready, set, learn!</p>
+          <a class="primary-link" href="#jogos">Escolher um jogo <span aria-hidden="true">↓</span></a>
+        </div>
+        <div class="hero-art" aria-hidden="true">
+          <div class="orbit orbit-one"></div>
+          <div class="orbit orbit-two"></div>
+          <div class="art-card card-back">A B C</div>
+          <div class="art-card card-front"><span>hello!</span><b>👋</b></div>
+          <span class="spark spark-one">✦</span><span class="spark spark-two">✧</span>
+          <span class="art-word word-one">learn</span><span class="art-word word-two">play</span>
+        </div>
+      </section>
+
+      <section class="progress-strip" id="progresso" aria-label="Seu progresso">
+        <div class="rank-block">
+          <div class="rank-emblem" aria-hidden="true">✦</div>
+          <div><span class="stat-label">SEU NÍVEL</span><strong id="rankName">Iniciante</strong><span class="stage-label" id="stageText">Etapa 1 de 100</span></div>
+        </div>
+        <div class="xp-block">
+          <div class="xp-heading"><span class="stat-label">PROGRESSO DO NÍVEL</span><strong><span id="xpCount">0</span> XP</strong></div>
+          <div class="progress-track"><div class="progress-fill" id="rankProgress"></div></div>
+          <span class="next-rank" id="nextRankText">Comece um jogo para ganhar XP</span>
+        </div>
+        <div class="streak-block">
+          <span class="streak-icon" aria-hidden="true">🔥</span>
+          <div><strong><span id="streakCount">0</span> dias</strong><span class="stat-label">DE SEQUÊNCIA</span></div>
+        </div>
+        <div class="answer-block">
+          <span class="answer-icon" aria-hidden="true">✓</span>
+          <div><strong id="answerCount">0</strong><span class="stat-label">RESPOSTAS CERTAS</span></div>
+        </div>
+      </section>
+
+      <section class="games-section" id="jogos">
+        <div class="section-heading">
+          <div><span class="eyebrow">APRENDA BRINCANDO</span><h2>Escolha seu desafio</h2></div>
+          <span class="section-note">Sessões rápidas. Progresso de verdade.</span>
+        </div>
+
+        <div class="game-layout">
+          <div class="game-list" aria-label="Atividades disponíveis">
+            <button class="game-card active" data-mode="vocabulary" type="button">
+              <span class="game-icon icon-purple">Aa</span>
+              <span class="game-info"><strong>Quiz de vocabulário</strong><small>Descubra novas palavras</small></span>
+              <span class="game-arrow" aria-hidden="true">↗</span>
+            </button>
+            <button class="game-card" data-mode="grammar" type="button">
+              <span class="game-icon icon-orange">?</span>
+              <span class="game-info"><strong>Grammar sprint</strong><small>Destrave a gramática</small></span>
+              <span class="game-arrow" aria-hidden="true">↗</span>
+            </button>
+            <button class="game-card" data-mode="sentence" type="button">
+              <span class="game-icon icon-green">☰</span>
+              <span class="game-info"><strong>Monte a frase</strong><small>Organize as palavras</small></span>
+              <span class="game-arrow" aria-hidden="true">↗</span>
+            </button>
+            <button class="game-card" data-mode="translation" type="button">
+              <span class="game-icon icon-orange">文</span>
+              <span class="game-info"><strong>Traduza a frase</strong><small>Escreva ou fale em inglês</small></span>
+              <span class="game-arrow" aria-hidden="true">↗</span>
+            </button>
+            <button class="game-card" data-mode="question" type="button">
+              <span class="game-icon icon-purple">?</span>
+              <span class="game-info"><strong>Responda em inglês</strong><small>Ouça, escreva ou fale</small></span>
+              <span class="game-arrow" aria-hidden="true">↗</span>
+            </button>
+            <div class="tip-card"><span aria-hidden="true">💡</span><p><strong>Dica de aprendizagem</strong><br />Errar faz parte! Tente novamente e aprenda com cada resposta.</p></div>
+          </div>
+
+          <section class="play-panel" aria-label="Área do jogo">
+            <div class="play-panel-top"><span class="playing-label"><span class="live-dot"></span> AGORA JOGANDO</span><span class="reward-pill">✦ <span id="rewardAmount">+10</span> XP</span></div>
+            <div id="gameArea" aria-live="polite"></div>
+          </section>
+        </div>
+      </section>
+    </main>
+
+    <footer><a class="brand footer-brand" href="#inicio"><span class="brand-mark">L</span><span>lingua<span class="brand-accent">play</span></span></a><span>Pequenos passos. Grandes conquistas. <b>✦</b></span></footer>
+    <script src="script.js"></script>
+  </body>
+</html>
