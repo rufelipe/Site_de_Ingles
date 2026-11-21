@@ -159,3 +159,10 @@ body[data-view="teacher"] { color-scheme:dark; background:#08070b; }
 
 @media(max-width:760px) { .teacher-grid { grid-template-columns:1fr 1fr; } .teacher-charts { grid-template-columns:1fr; } .teacher-header { align-items:flex-start; } }
 @media(max-width:520px) { .teacher-portal,.learner-portal { padding:18px 13px 34px; } .teacher-grid { grid-template-columns:1fr; } .teacher-form { grid-template-columns:1fr; } .teacher-field.full { grid-column:auto; } .teacher-chart-card { grid-template-columns:110px minmax(0,1fr); gap:12px; } .teacher-pie { width:100px; } .teacher-pie::before { width:66px; } .teacher-header { flex-direction:column; } }
+
+
+.teacher-progress-row { display:grid; gap:6px; margin:14px 0; }
+.teacher-progress-row > div:first-child { display:flex; justify-content:space-between; gap:12px; color:#51465e; font-size:12px; }
+.teacher-progress-row strong { color:#7042a7; }
+.teacher-progress-track { height:10px; overflow:hidden; border-radius:999px; background:#eee9f3; }
+.teacher-progress-track span { display:block; height:100%; min-width:0; border-radius:999px; background:linear-gradient(90deg,#8e58cc,#b783e6); transition:width .35s ease; }
