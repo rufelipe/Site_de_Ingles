@@ -2502,3 +2502,7 @@ body[data-background="galaxy"] .language-control {
 .teacher-more-button { min-width: 38px; padding: 5px 10px; font-size: 20px; line-height: 1; }
 .teacher-lesson-history { flex-basis: 100%; margin-top: 10px; padding: 12px 14px; border: 1px solid #e9e1f1; border-radius: 10px; background: #faf8fc; color: #51465e; font-size: 12px; }
 .teacher-lesson-history p { margin: 7px 0 0; }
+
+.teacher-lesson-history-entry { padding: 9px 0; border-bottom: 1px solid #eee8f4; color: #51465e; font-size: 12px; }
+.teacher-lesson-history-entry:last-child { border-bottom: 0; }
+.teacher-lesson-history-entry p { margin: 5px 0 0; color: #81798a; }
