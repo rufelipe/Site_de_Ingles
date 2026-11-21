@@ -37,24 +37,31 @@ let pendingBackgroundPhoto = '';
 const settingsKey = 'english-school-student-settings';
 
 function updateStudentGameProgressWidget() {
-  const xp = Number(localStorage.getItem('linguaplay-xp')) || 0;
-  const answers = Number(localStorage.getItem('linguaplay-answers')) || 0;
-  const level = Math.floor(answers / 100) + 1;
-  const stage = (answers % 100) + 1;
-  const ranks = ['Iniciante', 'Explorador', 'Comunicador', 'Fluente'];
-  const rank = ranks[(level - 1) % ranks.length];
   const xpEl = document.getElementById('sidebar-xp-value');
   const levelEl = document.getElementById('sidebar-xp-level');
   const rankEl = document.getElementById('sidebar-xp-rank');
   const fillEl = document.getElementById('sidebar-xp-fill');
   const card = document.getElementById('sidebar-xp-card');
   if (!xpEl || !levelEl || !rankEl || !fillEl || !card) return;
-  xpEl.textContent = xp;
-  levelEl.textContent = level;
-  rankEl.textContent = rank;
-  fillEl.style.width = ((stage - 1) / 100 * 100) + '%';
-  const track = card.querySelector('.sidebar-xp-track');
-  if (track) track.setAttribute('aria-valuenow', String(stage - 1));
+  const render = (stats = {}) => {
+    const xp = Number(stats.xp) || 0;
+    const answers = Number(stats.correct_answers) || 0;
+    const level = Math.floor(answers / 100) + 1;
+    const stage = (answers % 100) + 1;
+    const ranks = ['Iniciante', 'Explorador', 'Comunicador', 'Fluente'];
+    xpEl.textContent = xp;
+    levelEl.textContent = level;
+    rankEl.textContent = ranks[(level - 1) % ranks.length];
+    fillEl.style.width = ((stage - 1) / 100 * 100) + '%';
+    const track = card.querySelector('.sidebar-xp-track');
+    if (track) track.setAttribute('aria-valuenow', String(stage - 1));
+  };
+  render();
+  if (!currentStudentUsername) return;
+  fetch('/api/games/content', { credentials: 'same-origin' })
+    .then((response) => response.ok ? response.json() : null)
+    .then((data) => { if (data?.stats) render(data.stats); })
+    .catch(() => {});
 }
 
 window.addEventListener('storage', updateStudentGameProgressWidget);
