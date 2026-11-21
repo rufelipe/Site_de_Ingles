@@ -331,6 +331,7 @@ function award(points) {
   localStorage.setItem(storageKeys.xp, xp);
   localStorage.setItem(storageKeys.answers, correctAnswers);
   updateDashboard();
+  saveGameAttempt(true, points);
 }
 
 function speak(text, language) {
