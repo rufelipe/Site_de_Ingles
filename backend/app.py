@@ -559,6 +559,7 @@ class AppHandler(BaseHTTPRequestHandler):
                     if not staff:
                         return
                     db.execute("INSERT INTO lesson_audit(id,lesson_id,student_id,lesson_title,action,actor_id,actor_name) VALUES(%s,%s,%s,%s,%s,%s,%s)", (uuid.uuid4().hex, lesson_id, lesson["student_id"], lesson["title"], "deleted", staff["id"], staff["name"]))
+                    db.execute("DELETE FROM ai_game_questions WHERE lesson_id=%s", (lesson_id,))
                     db.execute("DELETE FROM lessons WHERE id=%s", (lesson_id,))
                     return self.send_json(200, {"ok": True})
                 staff = self.require_staff(db, user)
