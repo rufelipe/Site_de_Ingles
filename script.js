@@ -66,6 +66,7 @@ function updateStudentGameProgressWidget() {
 }
 
 window.addEventListener('storage', updateStudentGameProgressWidget);
+window.addEventListener('pageshow', updateStudentGameProgressWidget);
 document.body.dataset.role = selectedRole;
 
 const translations = {
