@@ -10,14 +10,16 @@ async function loadGameStudentProfile() {
     if (!meResult.ok) return;
     const me = await meResult.json();
     const settings = settingsResult.ok ? (await settingsResult.json()).settings || {} : {};
-    nameEl.textContent = me.user?.name || me.user?.username || 'Aluno';
+    const fullName = me.user?.name || me.user?.username || 'Aluno';
+    const firstName = fullName.trim().split(/\\s+/)[0] || 'Aluno';
+    nameEl.textContent = firstName;
     if (settings.avatar) {
       avatarEl.textContent = '';
       avatarEl.style.backgroundImage = 'url("' + settings.avatar.replace(/"/g, '%22') + '")';
       avatarEl.classList.add('has-photo');
     } else {
       const style = settings.avatarStyle || {};
-      avatarEl.textContent = (me.user?.name || me.user?.username || 'A').trim().charAt(0).toUpperCase();
+      avatarEl.textContent = firstName.charAt(0).toUpperCase();
       avatarEl.style.setProperty('--avatar-skin', style.skin || '#d99b72');
       avatarEl.style.setProperty('--avatar-hair', style.hair || '#392638');
       avatarEl.style.setProperty('--avatar-clothes', style.clothes || '#8e58cc');
