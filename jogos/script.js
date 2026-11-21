@@ -473,11 +473,11 @@ function renderQuiz() {
   rewardAmount.textContent = '+10';
   gameArea.innerHTML = `
     <div class="game-content">
-      <span class="game-category">${question.category} · etapa ${progress.stage}/100</span>
+      <span class="game-category">${escapeGameText(question.category)} · etapa ${progress.stage}/100</span>
       <h3>Responda e ganhe XP!</h3>
       <p class="question-hint">Escolha a alternativa correta para continuar sua jornada.</p>
-      <p class="question-word">${question.prompt}</p>
-      <div class="options-grid">${question.choices.map((choice, index) => `<button class="option-button" type="button" data-choice="${index}">${choice}</button>`).join('')}</div>
+      <p class="question-word">${escapeGameText(question.prompt)}</p>
+      <div class="options-grid">${question.choices.map((choice, index) => `<button class="option-button" type="button" data-choice="${index}">${escapeGameText(choice)}</button>`).join('')}</div>
       <p class="feedback" id="feedback" aria-live="polite">Uma resposta certa vale 10 XP.</p>
     </div>`;
   gameArea.querySelectorAll('.option-button').forEach((button) => {
@@ -539,9 +539,9 @@ function renderPhrase() {
     <div class="game-content">
       <span class="game-category">Desafio · construção de frases · nível ${progress.difficulty}</span>
       <h3>Coloque as palavras em ordem</h3>
-      <p class="question-hint">${phrase.prompt}</p>
+      <p class="question-hint">${escapeGameText(phrase.prompt)}</p>
       <div class="phrase-target" id="phraseTarget" aria-label="Sua frase"></div>
-      <div class="word-bank" id="wordBank">${phrase.words.map((word, index) => `<button class="word-chip" type="button" data-word="${index}">${word}</button>`).join('')}</div>
+      <div class="word-bank" id="wordBank">${phrase.words.map((word, index) => `<button class="word-chip" type="button" data-word="${index}">${escapeGameText(word)}</button>`).join('')}</div>
       <p class="feedback" id="feedback" aria-live="polite">Toque nas palavras na ordem correta. Vale 15 XP.</p>
       <button class="check-button" id="checkPhrase" type="button">Conferir frase</button>
     </div>`;
