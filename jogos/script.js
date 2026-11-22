@@ -409,11 +409,11 @@ async function renderWritingChallenge() {
   let challenge;
   try {
     challenge = await fetchAiQuestion(mode);
-    currentGameQuestion = challenge;
   } catch (error) {
-    gameArea.innerHTML = '<div class="game-content"><h3>Atividade personalizada indisponível</h3><p class="question-hint">' + escapeGameText(error.message) + '</p><button class="next-button" type="button" id="retryAiQuestion">Tentar novamente</button></div>';
-    document.getElementById('retryAiQuestion')?.addEventListener('click', renderWritingChallenge);
-    return;
+    challenge = mode === 'question' && assignedLessonWritingChallenges.length
+      ? assignedLessonWritingChallenges[writingIndex % assignedLessonWritingChallenges.length]
+      : writingChallenges[mode][writingIndex % writingChallenges[mode].length];
+    console.warn('Usando atividade escrita local de reserva:', error);
   }
   currentGameQuestion = challenge;
   const isTranslation = mode === 'translation';
@@ -518,11 +518,14 @@ async function renderQuiz() {
   let question;
   try {
     question = await fetchAiQuestion(mode);
-    currentGameQuestion = question;
   } catch (error) {
-    gameArea.innerHTML = '<div class="game-content"><h3>Atividade personalizada indisponível</h3><p class="question-hint">' + escapeGameText(error.message) + '</p><p>Peça ao professor para verificar o PDF anexado à sua lição.</p><button class="next-button" type="button" id="retryAiQuestion">Tentar novamente</button></div>';
-    document.getElementById('retryAiQuestion')?.addEventListener('click', renderQuiz);
-    return;
+    // Mantém o jogo disponível quando a IA ou a leitura do PDF falhar.
+    const lessonQuestion = assignedLessonQuestions.length
+      ? assignedLessonQuestions[questionIndex % assignedLessonQuestions.length]
+      : null;
+    const defaults = questionSets[mode] || questionSets.vocabulary;
+    question = { ...(lessonQuestion || defaults[questionIndex % defaults.length]), lessonId: lessonQuestion?.lessonId || null };
+    console.warn('Usando atividade local de reserva:', error);
   }
   currentGameQuestion = question;
   answered = false;
@@ -587,11 +590,11 @@ async function renderPhrase() {
   let phrase;
   try {
     phrase = await fetchAiQuestion('sentence');
-    currentGameQuestion = phrase;
   } catch (error) {
-    gameArea.innerHTML = '<div class="game-content"><h3>Atividade personalizada indisponível</h3><p class="question-hint">' + escapeGameText(error.message) + '</p><button class="next-button" type="button" id="retryAiQuestion">Tentar novamente</button></div>';
-    document.getElementById('retryAiQuestion')?.addEventListener('click', renderPhrase);
-    return;
+    phrase = assignedLessonPhrases.length
+      ? assignedLessonPhrases[phraseIndex % assignedLessonPhrases.length]
+      : { prompt: 'Organize a frase em inglês:', answer: ['I', 'learn', 'English', 'every', 'day'], words: ['English', 'every', 'I', 'day', 'learn'], lessonId: null };
+    console.warn('Usando frase local de reserva:', error);
   }
   currentGameQuestion = phrase;
   selectedWords = [];
