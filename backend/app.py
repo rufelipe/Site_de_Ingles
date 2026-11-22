@@ -209,11 +209,18 @@ def generate_gemini_game_questions(source_text, mode, lesson_title, lesson_level
     student_level = max(1, min(int(student_level or 1), 50))
     difficulty = max(1, min(int(difficulty or 1), 5))
     difficulty_guidance = {
-        1: "Iniciante: alfabeto, cumprimentos, números, cores, objetos comuns, verbo to be e frases muito curtas.",
-        2: "Básico: rotina, família, comida, lugares, presente simples, artigos, pronomes, plurais e perguntas simples.",
-        3: "Intermediário: passado e futuro, comparativos, preposições, conectores, modais e compreensão de pequenos diálogos.",
-        4: "Intermediário-avançado: condicionais, voz passiva, reported speech, phrasal verbs e textos mais complexos.",
-        5: "Avançado: collocations, expressões idiomáticas, nuances de significado, estruturas complexas e interpretação crítica."
+        1: "INICIANTE ABSOLUTO. Use apenas alfabeto, cumprimentos, números, cores, objetos comuns, pronomes básicos e verbo to be. Vocabulário muito frequente e frases de 2 a 5 palavras. NÃO use tempos verbais além do presente simples básico, phrasal verbs ou expressões idiomáticas.",
+        2: "BÁSICO. Rotina, família, comida, lugares, presente simples e contínuo, artigos, pronomes, plurais e perguntas curtas. Frases curtas e vocabulário cotidiano.",
+        3: "INTERMEDIÁRIO. Passado e futuro, comparativos, preposições, conectores, modais e pequenos diálogos. Vocabulário variado, mas comum.",
+        4: "INTERMEDIÁRIO-AVANÇADO. Condicionais, voz passiva, reported speech, phrasal verbs e textos mais complexos.",
+        5: "AVANÇADO. Collocations, expressões idiomáticas, nuances de significado, estruturas complexas e interpretação crítica."
+    }
+    language_guidance = {
+        1: "IDIOMA OBRIGATÓRIO: escreva TODOS os enunciados, instruções, explicações e categorias em PORTUGUÊS DO BRASIL. O inglês deve aparecer somente no termo, palavra ou frase que o aluno precisa aprender. Não escreva instruções como 'Choose', 'Complete the sentence' ou 'What is'. Use 'Escolha', 'Complete' em português: 'Complete a frase: I ___ a student.'",
+        2: "Escreva instruções e explicações em PORTUGUÊS DO BRASIL. Use inglês apenas nas frases curtas que são o objeto do exercício. Não exija que o aluno compreenda instruções em inglês.",
+        3: "Use instruções em português e misture frases/exemplos em inglês de dificuldade intermediária. Pequenos trechos em inglês podem aparecer nos enunciados, sempre com contexto claro.",
+        4: "Use principalmente inglês simples nos enunciados, mas mantenha explicações em português quando necessário. Exercícios mais longos e complexos.",
+        5: "Use inglês predominantemente, inclusive nos enunciados, com explicações concisas em português ou inglês."
     }
     instructions = {
         "vocabulary": "Crie questões variadas de vocabulário geral em inglês adequadas ao nível do aluno, com quatro alternativas em português e uma correta. Campos: category,prompt,choices,answer,explanation.",
@@ -223,10 +230,13 @@ def generate_gemini_game_questions(source_text, mode, lesson_title, lesson_level
         "question": "Crie perguntas simples e originais de conversação em inglês sobre situações do cotidiano, adequadas ao nível. Campos: category,prompt,audioPrompt,language='en-US',answer,accepted (array)."
     }
     prompt = (
-         "Você é professor de inglês e deve criar exercícios originais de inglês para prática geral. Não dependa de PDFs, arquivos ou conteúdo de lições. "
+         "Você é professor de inglês para brasileiros e deve criar exercícios originais de prática geral. Não dependa de PDFs, arquivos ou conteúdo de lições. "
+        "REGRA FUNDAMENTAL: respeite rigorosamente o nível e o idioma dos enunciados. Não transforme exercícios de iniciante em provas totalmente em inglês. "
         "Gere " + str(count) + " questões DIFERENTES, sem repetir palavras-alvo, frases ou respostas. "
         "Nível geral do aluno: " + str(student_level) + ". Dificuldade: " + str(difficulty) + "/5. "
-        "Orientação: " + difficulty_guidance[difficulty] + " "
+        "Orientação pedagógica: " + difficulty_guidance[difficulty] + " "
+        "Idioma e formato dos enunciados: " + language_guidance[difficulty] + " "
+        "Antes de finalizar, revise cada questão e descarte qualquer uma que esteja acima do nível. "
         "Nível informado pelo professor: " + str(lesson_level or "não informado") + ". "
         "Retorne somente JSON válido no formato {\"questions\":[...]} sem markdown. "
         "Tipo: " + mode + ". Lição: " + str(lesson_title) + ". "
@@ -310,8 +320,8 @@ def generate_gemini_game_questions(source_text, mode, lesson_title, lesson_level
                 question["aiModel"] = model
                 question["difficulty"] = difficulty
                 question["studentLevel"] = student_level
-                question.setdefault("category", "Atividade personalizada · PDF")
-                question.setdefault("explanation", "Resposta baseada no conteúdo do PDF da sua lição.")
+                question.setdefault("category", "Prática geral de inglês · Nível " + str(difficulty))
+                question.setdefault("explanation", "Explicação em português adequada ao nível do aluno.")
                 if not isinstance(question.get("accepted"), list):
                     question["accepted"] = []
                 question.setdefault("audioPrompt", question.get("prompt", ""))
