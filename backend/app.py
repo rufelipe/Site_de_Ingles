@@ -628,7 +628,7 @@ class AppHandler(BaseHTTPRequestHandler):
                     ).fetchone()["total"]
                 )
                 if not os.environ.get("GEMINI_API_KEY", "").strip():
-                    return self.send_json(503, {"error": "Configure GEMINI_API_KEY nas variáveis do Render para ativar a geração por IA."})
+                    return self.send_json(503, {"error": "Configure GEMINI_API_KEY nas variáveis do Render para ativar a geração por IA.", "retryable": False})
 
                 try:
                     batch_size = int(os.environ.get("GEMINI_GAME_BATCH_SIZE", "8"))
