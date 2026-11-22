@@ -75,11 +75,38 @@ function prefetchAiQuestion(gameMode) {
     });
 }
 
-function takePrefetchedAiQuestion(gameMode) {
-  const queue = prefetchedAiQuestions[gameMode] || [];
-  const question = queue.shift() || null;
+async function takeAiQuestion(gameMode) {
+  const queue = prefetchedAiQuestions[gameMode] || (prefetchedAiQuestions[gameMode] = []);
+  if (queue.length) {
+    const question = queue.shift();
+    prefetchAiQuestion(gameMode);
+    return question;
+  }
+  if (pendingAiQuestions[gameMode]) {
+    await pendingAiQuestions[gameMode];
+    const readyQueue = prefetchedAiQuestions[gameMode] || [];
+    if (readyQueue.length) {
+      const question = readyQueue.shift();
+      prefetchAiQuestion(gameMode);
+      return question;
+    }
+  }
+  // Na primeira atividade (ou quando a fila acabar), espera uma questão de IA real.
+  // Não mostra mais as mesmas questões fixas como se fossem personalizadas.
+  const question = await fetchAiQuestion(gameMode);
   prefetchAiQuestion(gameMode);
   return question;
+}
+
+function showAiQuestionError(error, retry) {
+  gameArea.innerHTML = `
+    <div class="game-content">
+      <span class="game-category">Atividade personalizada</span>
+      <h3>Preparando suas próximas perguntas</h3>
+      <p class="question-hint">${escapeGameText(error?.message || 'Não foi possível gerar uma nova pergunta agora.')}</p>
+      <button class="check-button" id="retryAiQuestion" type="button">Tentar novamente</button>
+    </div>`;
+  document.getElementById('retryAiQuestion')?.addEventListener('click', retry);
 }
 
 function buildQuestionsFromAssignedLessons(lessons) {
@@ -435,22 +462,27 @@ function normalizeAnswer(text) {
 }
 
 async function renderWritingChallenge() {
+  const requestedMode = mode;
   const progress = getProgress();
-  let challenge = takePrefetchedAiQuestion(mode);
-  if (!challenge) {
-    challenge = mode === 'question' && assignedLessonWritingChallenges.length
-      ? assignedLessonWritingChallenges[writingIndex % assignedLessonWritingChallenges.length]
-      : writingChallenges[mode][writingIndex % writingChallenges[mode].length];
+  gameArea.innerHTML = '<div class="game-content"><p class="question-hint">A IA está criando uma atividade a partir da sua lição...</p></div>';
+  let challenge;
+  try {
+    challenge = await takeAiQuestion(requestedMode);
+  } catch (error) {
+    if (mode !== requestedMode) return;
+    showAiQuestionError(error, () => renderWritingChallenge());
+    return;
   }
+  if (mode !== requestedMode) return;
   currentGameQuestion = challenge;
-  const isTranslation = mode === 'translation';
+  const isTranslation = requestedMode === 'translation';
   answered = false;
   rewardAmount.textContent = '+15';
   gameArea.innerHTML = `
     <div class="game-content">
-      <span class="game-category">${challenge.category} · etapa ${progress.stage}/100</span>
-      <h3>${challenge.customLessonChallenge ? 'Ouça e escreva a frase da lição' : (isTranslation ? 'Escreva ou fale a tradução' : 'Ouça e responda em inglês')}</h3>
-      <p class="question-hint">${challenge.prompt}</p>
+      <span class="game-category">${escapeGameText(challenge.category || 'Sua lição · IA')} · nível ${progress.level} · dificuldade ${challenge.difficulty || progress.difficulty}/5</span>
+      <h3>${isTranslation ? 'Escreva ou fale a tradução' : 'Ouça e responda em inglês'}</h3>
+      <p class="question-hint">${escapeGameText(challenge.prompt)}</p>
       <div class="audio-actions">
         <button class="audio-button" id="playPrompt" type="button">🔊 Ouvir ${isTranslation ? 'frase' : 'pergunta'}</button>
         <button class="audio-button" id="recordAnswer" type="button">🎙️ Responder por voz</button>
@@ -462,10 +494,10 @@ async function renderWritingChallenge() {
       <button class="check-button" id="checkWriting" type="button">Conferir resposta</button>
       <p class="feedback" id="feedback" aria-live="polite">Uma resposta certa vale 15 XP.</p>
     </div>`;
-  document.getElementById('playPrompt').addEventListener('click', () => speak(challenge.audioPrompt, challenge.language));
+  document.getElementById('playPrompt').addEventListener('click', () => speak(challenge.audioPrompt || challenge.prompt, challenge.language || (isTranslation ? 'pt-BR' : 'en-US')));
   document.getElementById('playAnswer').addEventListener('click', () => speak(challenge.answer, 'en-US'));
   document.getElementById('checkWriting').addEventListener('click', () => checkWritingAnswer(challenge));
-  setupSpeechRecognition();
+  document.getElementById('recordAnswer').addEventListener('click', () => startRecognition());
 }
 
 function setupSpeechRecognition() {
@@ -541,24 +573,26 @@ function checkWritingAnswer(challenge) {
 }
 
 async function renderQuiz() {
+  const requestedMode = mode;
   const progress = getProgress();
-  let question = takePrefetchedAiQuestion(mode);
-  if (!question) {
-    // Mostra uma pergunta local imediatamente enquanto a IA prepara o próximo lote.
-    const lessonQuestion = assignedLessonQuestions.length
-      ? assignedLessonQuestions[questionIndex % assignedLessonQuestions.length]
-      : null;
-    const defaults = questionSets[mode] || questionSets.vocabulary;
-    question = { ...(lessonQuestion || defaults[questionIndex % defaults.length]), lessonId: lessonQuestion?.lessonId || null };
+  gameArea.innerHTML = '<div class="game-content"><p class="question-hint">Preparando uma pergunta inédita da sua lição...</p></div>';
+  let question;
+  try {
+    question = await takeAiQuestion(requestedMode);
+  } catch (error) {
+    if (mode !== requestedMode) return;
+    showAiQuestionError(error, () => renderQuiz());
+    return;
   }
+  if (mode !== requestedMode) return;
   currentGameQuestion = question;
   answered = false;
   rewardAmount.textContent = '+10';
   gameArea.innerHTML = `
     <div class="game-content">
-      <span class="game-category">${escapeGameText(question.category)} · etapa ${progress.stage}/100</span>
+      <span class="game-category">${escapeGameText(question.category || 'Sua lição · IA')} · nível ${progress.level} · dificuldade ${question.difficulty || progress.difficulty}/5</span>
       <h3>Responda e ganhe XP!</h3>
-      <p class="question-hint">Escolha a alternativa correta para continuar sua jornada.</p>
+      <p class="question-hint">Questão criada por IA com base no material da sua lição.</p>
       <p class="question-word">${escapeGameText(question.prompt)}</p>
       <div class="options-grid">${question.choices.map((choice, index) => `<button class="option-button" type="button" data-choice="${index}">${escapeGameText(choice)}</button>`).join('')}</div>
       <p class="feedback" id="feedback" aria-live="polite">Uma resposta certa vale 10 XP.</p>
@@ -610,20 +644,25 @@ function addNextButton() {
 }
 
 async function renderPhrase() {
+  const requestedMode = mode;
   const progress = getProgress();
-  let phrase = takePrefetchedAiQuestion('sentence');
-  if (!phrase) {
-    phrase = assignedLessonPhrases.length
-      ? assignedLessonPhrases[phraseIndex % assignedLessonPhrases.length]
-      : { prompt: 'Organize a frase em inglês:', answer: ['I', 'learn', 'English', 'every', 'day'], words: ['English', 'every', 'I', 'day', 'learn'], lessonId: null };
+  gameArea.innerHTML = '<div class="game-content"><p class="question-hint">Criando uma frase inédita com base na sua lição...</p></div>';
+  let phrase;
+  try {
+    phrase = await takeAiQuestion('sentence');
+  } catch (error) {
+    if (mode !== requestedMode) return;
+    showAiQuestionError(error, () => renderPhrase());
+    return;
   }
+  if (mode !== requestedMode) return;
   currentGameQuestion = phrase;
   selectedWords = [];
   answered = false;
   rewardAmount.textContent = '+15';
   gameArea.innerHTML = `
     <div class="game-content">
-      <span class="game-category">Desafio · construção de frases · nível ${progress.difficulty}</span>
+      <span class="game-category">Construção de frases · nível ${progress.level} · dificuldade ${phrase.difficulty || progress.difficulty}/5</span>
       <h3>Coloque as palavras em ordem</h3>
       <p class="question-hint">${escapeGameText(phrase.prompt)}</p>
       <div class="phrase-target" id="phraseTarget" aria-label="Sua frase"></div>
