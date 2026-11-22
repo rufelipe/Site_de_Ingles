@@ -633,17 +633,9 @@ class AppHandler(BaseHTTPRequestHandler):
                 correct_total = int(stats["correct_answers"]) if stats else 0
                 student_level = (correct_total // 100) + 1
                 difficulty = min(5, student_level)
-                if sources:
-                    source_row, source_text, source_pdf = min(
-                        sources,
-                        key=lambda item: db.execute(
-                            "SELECT COUNT(*) AS total FROM ai_game_questions WHERE user_id=%s AND lesson_id=%s AND mode=%s",
-                            (user["id"], item[0]["id"], mode)
-                        ).fetchone()["total"]
-                    )
-                elif lesson_rows:
-                    # Geração geral: usa uma lição existente apenas como vínculo de propriedade,
-                    # sem ler ou depender de PDF, descrição, anexos ou anotações.
+                if lesson_rows:
+                    # Todas as perguntas agora são gerais e criadas pela IA conforme o nível.
+                    # A lição mais recente é usada somente para vincular a tentativa ao aluno.
                     latest_lesson = lesson_rows[0]
                     source_row = {"id": latest_lesson["id"], "title": "Prática geral de inglês", "level": ""}
                     source_text, source_pdf = "", None
