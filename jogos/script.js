@@ -48,27 +48,44 @@ let currentGameQuestion = null;
 async function fetchAiQuestion(gameMode) {
   const response = await fetch('../api/games/next-question?mode=' + encodeURIComponent(gameMode), { credentials: 'same-origin' });
   const result = await response.json();
-  if (!response.ok) throw new Error(result.error || 'Não foi possível gerar uma atividade personalizada.');
+  if (!response.ok) {
+    const error = new Error(result.error || 'Não foi possível gerar uma atividade personalizada.');
+    error.status = response.status;
+    error.retryable = result.retryable !== false;
+    throw error;
+  }
   return result.question;
 }
 
-// A geração com IA acontece em segundo plano. O aluno nunca precisa esperar a IA
-// para visualizar ou responder à próxima atividade.
+// A geração fica em segundo plano. Se o backend esgotar os modelos por falha
+// temporária, o navegador faz mais duas tentativas automáticas, sem exigir clique.
 const prefetchedAiQuestions = Object.create(null);
 const pendingAiQuestions = Object.create(null);
-const aiRetryAfter = Object.create(null);
+const lastAiErrors = Object.create(null);
 
 function prefetchAiQuestion(gameMode) {
   if (pendingAiQuestions[gameMode] || (prefetchedAiQuestions[gameMode] || []).length) return;
-  if ((aiRetryAfter[gameMode] || 0) > Date.now()) return;
-  pendingAiQuestions[gameMode] = fetchAiQuestion(gameMode)
-    .then((question) => {
-      (prefetchedAiQuestions[gameMode] ||= []).push(question);
-      aiRetryAfter[gameMode] = 0;
-    })
+  pendingAiQuestions[gameMode] = (async () => {
+    let lastError;
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      try {
+        const question = await fetchAiQuestion(gameMode);
+        (prefetchedAiQuestions[gameMode] ||= []).push(question);
+        lastAiErrors[gameMode] = null;
+        return;
+      } catch (error) {
+        lastError = error;
+        lastAiErrors[gameMode] = error;
+        console.warn('Falha na geração de perguntas; tentativa automática', attempt + 1, 'de 3:', error);
+        if (error.retryable === false || attempt === 2) break;
+        await new Promise((resolve) => setTimeout(resolve, 900 * (attempt + 1)));
+      }
+    }
+    throw lastError || new Error('Não foi possível gerar perguntas.');
+  })()
     .catch((error) => {
-      aiRetryAfter[gameMode] = Date.now() + 20000;
-      console.warn('Atividade personalizada será tentada novamente em segundo plano:', error);
+      lastAiErrors[gameMode] = error;
+      console.error('Todas as tentativas automáticas de geração falharam:', error);
     })
     .finally(() => {
       delete pendingAiQuestions[gameMode];
@@ -82,23 +99,14 @@ async function takeAiQuestion(gameMode) {
     prefetchAiQuestion(gameMode);
     return question;
   }
-  if (pendingAiQuestions[gameMode]) {
-    await pendingAiQuestions[gameMode];
-    const readyQueue = prefetchedAiQuestions[gameMode] || [];
-    if (readyQueue.length) {
-      const question = readyQueue.shift();
-      prefetchAiQuestion(gameMode);
-      return question;
-    }
-    if ((aiRetryAfter[gameMode] || 0) > Date.now()) {
-      throw new Error('A IA está temporariamente indisponível. Aguarde alguns segundos e tente novamente.');
-    }
-  }
-  // Na primeira atividade (ou quando a fila acabar), espera uma questão de IA real.
-  // Não mostra mais as mesmas questões fixas como se fossem personalizadas.
-  const question = await fetchAiQuestion(gameMode);
   prefetchAiQuestion(gameMode);
-  return question;
+  if (pendingAiQuestions[gameMode]) await pendingAiQuestions[gameMode];
+  if (queue.length) {
+    const question = queue.shift();
+    prefetchAiQuestion(gameMode);
+    return question;
+  }
+  throw lastAiErrors[gameMode] || new Error('Não foi possível gerar uma pergunta após testar automaticamente os modelos disponíveis.');
 }
 
 function showAiQuestionError(error, retry) {
