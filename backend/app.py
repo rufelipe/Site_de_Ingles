@@ -442,10 +442,15 @@ class AppHandler(BaseHTTPRequestHandler):
                 sources = []
                 for row in rows:
                     raw_pdf = bytes(row["content"] or b"")
+                    filename = str(row["name"] or "").strip().lower()
+                    mime_type = str(row["mime_type"] or "").strip().lower()
                     extracted = extract_attachment_text(row["name"], row["mime_type"], raw_pdf)
-                    # Mesmo PDFs digitalizados, sem camada de texto, podem ser lidos pela IA
-                    # enviando o próprio PDF como documento multimodal.
-                    if raw_pdf.startswith(b"%PDF"):
+                    # O cabeçalho PDF pode aparecer após bytes iniciais; a identificação
+                    # principal vem do nome/MIME armazenado no cadastro do anexo.
+                    is_pdf = filename.endswith(".pdf") or "pdf" in mime_type
+                    if is_pdf and raw_pdf:
+                        if b"%PDF" not in raw_pdf[:1024]:
+                            print("PDF attachment has an unusual header:", filename, mime_type, len(raw_pdf))
                         sources.append((row, extracted, raw_pdf))
                 if not sources:
                     return self.send_json(422, {"error": "Não encontrei um anexo PDF válido nesta lição. Confira se o arquivo anexado é realmente um PDF."})
