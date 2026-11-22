@@ -576,7 +576,7 @@ class AppHandler(BaseHTTPRequestHandler):
                 stats = db.execute("SELECT correct_answers FROM game_stats WHERE user_id=%s", (user["id"],)).fetchone()
                 correct_total = int(stats["correct_answers"]) if stats else 0
                 student_level = (correct_total // 100) + 1
-                difficulty = min(5, (correct_total // 20) + 1)
+                difficulty = min(5, student_level)
                 source_row, source_text, source_pdf = min(
                     sources,
                     key=lambda item: db.execute(
