@@ -315,12 +315,10 @@ def generate_gemini_game_questions(source_text, mode, lesson_title, lesson_level
                         "choose ", "select ", "complete ", "match ", "translate ",
                         "fill ", "identify ", "the meaning ", "the word "
                     )
-                    portuguese_markers = (
-                        "o que ", "qual ", "quais ", "como ", "escolha ",
-                        "selecione ", "complete ", "associe ", "relacione ",
-                        "identifique ", "marque ", "em português", "significa"
-                    )
-                    if prompt_text.startswith(english_starts) or not any(marker in prompt_text for marker in portuguese_markers):
+                    # Rejeita apenas enunciados claramente iniciados em inglês.
+                    # Não exige palavras-chave específicas em português: perguntas
+                    # como "A palavra apple significa..." também são válidas.
+                    if prompt_text.startswith(english_starts):
                         continue
                     question["promptLanguageVersion"] = 2
                 elif mode == "sentence":
