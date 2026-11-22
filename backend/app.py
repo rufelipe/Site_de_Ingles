@@ -261,7 +261,7 @@ def generate_gemini_game_questions(source_text, mode, lesson_title, lesson_level
         available_models = [probe]
 
     errors = []
-    deadline = time.monotonic() + 48
+    deadline = time.monotonic() + 20
     for model in available_models:
         remaining = deadline - time.monotonic()
         if remaining <= 0:
@@ -274,7 +274,7 @@ def generate_gemini_game_questions(source_text, mode, lesson_title, lesson_level
                 "x-goog-api-key": api_key
             }, method="POST")
             # Sem espera/backoff entre modelos: falhou, passa imediatamente ao próximo.
-            with urlopen(request, timeout=min(7, remaining)) as response:
+            with urlopen(request, timeout=min(5 if model == available_models[0] else 3, remaining)) as response:
                 result = json.loads(response.read().decode("utf-8"))
 
             candidates = result.get("candidates") or []
@@ -598,37 +598,10 @@ class AppHandler(BaseHTTPRequestHandler):
                     question["questionId"] = available["id"]
                     return self.send_json(200, {"question": question, "source": "ai"})
 
-                # Carrega todas as lições do aluno, inclusive as que ainda não têm PDF.
-                # O PDF é priorizado, mas descrição, anotações e arquivos de texto também
-                # podem servir de fonte para a IA, evitando bloquear o jogo desnecessariamente.
-                lesson_rows = db.execute("""SELECT id,title,level,description
+                # As perguntas são de prática geral: não lemos anexos, PDFs ou anotações.
+                # Isso evita consultas e extração de arquivos antes de cada geração.
+                lesson_rows = db.execute("""SELECT id,title,level
                     FROM lessons WHERE student_id=%s ORDER BY created_at DESC""", (user["id"],)).fetchall()
-                sources = []
-                for lesson in lesson_rows:
-                    lesson_id = lesson["id"]
-                    lesson_title = lesson["title"]
-                    lesson_level = lesson["level"]
-                    lesson_text_parts = [str(lesson["description"] or "").strip()]
-                    notes = db.execute("SELECT content FROM notes WHERE user_id=%s AND lesson_id=%s AND content<>'' ORDER BY updated_at", (user["id"], lesson_id)).fetchall()
-                    lesson_text_parts.extend(str(note["content"] or "").strip() for note in notes)
-                    files = db.execute("SELECT name,mime_type,content FROM attachments WHERE lesson_id=%s ORDER BY created_at", (lesson_id,)).fetchall()
-                    pdf_source = None
-                    for file_row in files:
-                        raw_content = bytes(file_row["content"] or b"")
-                        filename = str(file_row["name"] or "").strip().lower()
-                        mime_type = str(file_row["mime_type"] or "").strip().lower()
-                        is_pdf = filename.endswith(".pdf") or "pdf" in mime_type or b"%PDF-" in raw_content[:2048]
-                        extracted = extract_attachment_text(file_row["name"], file_row["mime_type"], raw_content)
-                        if is_pdf and raw_content and pdf_source is None:
-                            pdf_source = (extracted, raw_content)
-                        elif extracted.strip():
-                            lesson_text_parts.append(extracted.strip())
-                    if pdf_source:
-                        sources.append(({"id": lesson_id, "title": lesson_title, "level": lesson_level}, pdf_source[0], pdf_source[1]))
-                    else:
-                        combined_text = "\n\n".join(part for part in lesson_text_parts if part)
-                        if len(combined_text.strip()) >= 30:
-                            sources.append(({"id": lesson_id, "title": lesson_title, "level": lesson_level}, combined_text[:24000], None))
                 stats = db.execute("SELECT correct_answers FROM game_stats WHERE user_id=%s", (user["id"],)).fetchone()
                 correct_total = int(stats["correct_answers"]) if stats else 0
                 student_level = (correct_total // 100) + 1
@@ -645,7 +618,7 @@ class AppHandler(BaseHTTPRequestHandler):
                     return self.send_json(503, {"error": "Configure GEMINI_API_KEY nas variáveis do Render para ativar a geração por IA.", "retryable": False})
 
                 try:
-                    batch_size = int(os.environ.get("GEMINI_GAME_BATCH_SIZE", "8"))
+                    batch_size = int(os.environ.get("GEMINI_GAME_BATCH_SIZE", "5"))
                     questions = generate_gemini_game_questions(
                         source_text, mode, source_row["title"], source_row["level"],
                         source_pdf, batch_size, student_level, difficulty
