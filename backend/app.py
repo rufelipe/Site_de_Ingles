@@ -191,7 +191,7 @@ def generate_gemini_game_question(source_text, mode, lesson_title, level, pdf_co
             question["words"] = question["answer"][:]
         random.shuffle(question["words"])
     question["customLessonChallenge"] = True
-    question.setdefault("category", "Inglês · nível " + str(difficulty))
+    question.setdefault("category", "Prática geral de inglês · IA")
     question.setdefault("explanation", "Explicação de inglês adequada ao nível atual do aluno.")
     question.setdefault("accepted", [])
     question.setdefault("audioPrompt", question.get("prompt", ""))
@@ -230,8 +230,8 @@ def generate_gemini_game_questions(source_text, mode, lesson_title, lesson_level
         "Nível informado pelo professor: " + str(lesson_level or "não informado") + ". "
         "Retorne somente JSON válido no formato {\"questions\":[...]} sem markdown. "
         "Tipo: " + mode + ". Lição: " + str(lesson_title) + ". "
-        "Instruções: " + instructions[mode] + "\nMaterial extraído do PDF (pode estar vazio; nesse caso, leia o arquivo anexado):\n" +
-        (source_text or "[Nenhum texto foi extraído; utilize o PDF anexado.]")[:10000]
+        "Instruções: " + instructions[mode] + "\nCrie situações variadas do cotidiano, com exemplos originais e respostas corretas. Evite repetir perguntas anteriores. " +
+        (("Contexto adicional: " + source_text[:4000]) if source_text else "Não há material de referência; use conhecimento geral de inglês.")
     )
     parts = [{"text": prompt}]
     if pdf_content:
