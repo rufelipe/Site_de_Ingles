@@ -380,7 +380,7 @@ const difficultyPhrases = [
 
 function getProgress() {
   const stage = (correctAnswers % 100) + 1;
-  return { level: Math.floor(correctAnswers / 100) + 1, stage, difficulty: Math.floor((stage - 1) / 20) + 1 };
+  return { level: Math.floor(correctAnswers / 100) + 1, stage, difficulty: Math.min(5, Math.floor(correctAnswers / 20) + 1) };
 }
 const storageKeys = { xp: 'linguaplay-xp', answers: 'linguaplay-answers', streak: 'linguaplay-streak', active: 'linguaplay-last-active' };
 // O servidor é a fonte de verdade; não reutilizamos XP local entre contas diferentes.
