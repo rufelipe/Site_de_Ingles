@@ -627,7 +627,7 @@ class AppHandler(BaseHTTPRequestHandler):
                     if pdf_source:
                         sources.append(({"id": lesson_id, "title": lesson_title, "level": lesson_level}, pdf_source[0], pdf_source[1]))
                     else:
-                        combined_text = "\\n\\n".join(part for part in lesson_text_parts if part)
+                        combined_text = "\n\n".join(part for part in lesson_text_parts if part)
                         if len(combined_text.strip()) >= 30:
                             sources.append(({"id": lesson_id, "title": lesson_title, "level": lesson_level}, combined_text[:24000], None))
                 if not sources:
