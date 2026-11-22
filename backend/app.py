@@ -24,6 +24,9 @@ DATABASE_URL = os.environ.get("DATABASE_URL", "").strip()
 MAX_REQUEST_SIZE = 55 * 1024 * 1024
 SESSION_SECONDS = 60 * 60 * 24 * 7
 
+# Modelos que falharam ficam temporariamente em cooldown para evitar repetir chamadas lentas.
+AI_MODEL_COOLDOWN = {}
+
 
 def connect():
     if not DATABASE_URL:
@@ -197,10 +200,11 @@ def generate_gemini_game_question(source_text, mode, lesson_title, level, pdf_co
 
 
 def generate_gemini_game_questions(source_text, mode, lesson_title, lesson_level, pdf_content=None, count=8, student_level=1, difficulty=1):
-    """Gera lote de questões com progressão de dificuldade e failover entre modelos Gemini."""
+    """Gera perguntas com failover rápido e cooldown por modelo indisponível."""
     api_key = os.environ.get("GEMINI_API_KEY", "").strip()
     if not api_key:
         raise RuntimeError("A variável GEMINI_API_KEY não está configurada no Render.")
+
     count = max(4, min(int(count or 8), 12))
     student_level = max(1, min(int(student_level or 1), 50))
     difficulty = max(1, min(int(difficulty or 1), 5))
@@ -219,30 +223,25 @@ def generate_gemini_game_questions(source_text, mode, lesson_title, lesson_level
         "question": "Cada questão deve ser uma pergunta de compreensão respondida pelo conteúdo do PDF. Campos: category,prompt,audioPrompt,language='en-US',answer,accepted (array)."
     }
     prompt = (
-        "Você é professor de inglês e deve criar uma avaliação personalizada. Use EXCLUSIVAMENTE o PDF anexado "
-        "e o texto extraído abaixo como fonte de conteúdo. Leia o PDF diretamente, inclusive se for escaneado. "
-        "Não crie perguntas genéricas nem use conhecimento externo. Gere " + str(count) +
-        " questões DIFERENTES, sem repetir palavras-alvo, frases ou respostas. "
-        "A dificuldade deve ser adequada ao progresso atual do aluno e subir gradualmente. "
-        "Nível geral do aluno: " + str(student_level) + ". Faixa de dificuldade: " + str(difficulty) + "/5. "
-        "Orientação obrigatória de dificuldade: " + difficulty_guidance[difficulty] + " "
-        "Nível informado pelo professor para a lição: " + str(lesson_level or "não informado") + ". "
-        "Não faça uma questão mais fácil que a faixa indicada, mas não exija conteúdo que não apareça no PDF. "
-        "Retorne somente JSON válido no formato {\"questions\":[...]} sem markdown.\n"
-        "Tipo: " + mode + ". Lição: " + str(lesson_title) + ".\nInstruções: " + instructions[mode] +
-        "\nTexto extraído do PDF (pode estar vazio; nesse caso, leia o arquivo PDF anexado):\n" +
-        (source_text or "[Nenhum texto foi extraído; utilize o PDF anexado visualmente.]")[:10000]
+        "Você é professor de inglês. Use EXCLUSIVAMENTE o PDF anexado e o texto extraído abaixo. "
+        "Leia o PDF diretamente, inclusive se for escaneado. Não invente conteúdo externo. "
+        "Gere " + str(count) + " questões DIFERENTES, sem repetir palavras-alvo, frases ou respostas. "
+        "Nível geral do aluno: " + str(student_level) + ". Dificuldade: " + str(difficulty) + "/5. "
+        "Orientação: " + difficulty_guidance[difficulty] + " "
+        "Nível informado pelo professor: " + str(lesson_level or "não informado") + ". "
+        "Retorne somente JSON válido no formato {\"questions\":[...]} sem markdown. "
+        "Tipo: " + mode + ". Lição: " + str(lesson_title) + ". "
+        "Instruções: " + instructions[mode] + "\nMaterial extraído do PDF (pode estar vazio; nesse caso, leia o arquivo anexado):\n" +
+        (source_text or "[Nenhum texto foi extraído; utilize o PDF anexado.]")[:10000]
     )
     parts = [{"text": prompt}]
     if pdf_content:
         parts.append({"inline_data": {"mime_type": "application/pdf", "data": base64.b64encode(bytes(pdf_content)).decode("ascii")}})
     body = json.dumps({
         "contents": [{"parts": parts}],
-        "generationConfig": {"temperature": 0.95, "responseMimeType": "application/json"}
+        "generationConfig": {"temperature": 0.85, "responseMimeType": "application/json"}
     }).encode("utf-8")
 
-    # Sete opções de modelo. Se um modelo estiver indisponível, limitado ou falhar,
-    # tenta o próximo sem interromper o jogo.
     models = [
         os.environ.get("GEMINI_MODEL", "").strip(),
         "gemini-3.8-flash",
@@ -254,17 +253,37 @@ def generate_gemini_game_questions(source_text, mode, lesson_title, lesson_level
         "gemini-3.1-pro-preview"
     ]
     unique_models = list(dict.fromkeys(model for model in models if model))
+    now = time.monotonic()
+    available_models = [model for model in unique_models if AI_MODEL_COOLDOWN.get(model, 0) <= now]
+    if not available_models and unique_models:
+        # Quando todos falham, testa novamente o primeiro cujo cooldown está mais próximo.
+        probe = min(unique_models, key=lambda model: AI_MODEL_COOLDOWN.get(model, 0))
+        AI_MODEL_COOLDOWN.pop(probe, None)
+        available_models = [probe]
+
     errors = []
-    for model in unique_models:
+    deadline = time.monotonic() + 48
+    for model in available_models:
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            errors.append("Tempo máximo de failover atingido.")
+            break
         try:
             url = "https://generativelanguage.googleapis.com/v1beta/models/" + model + ":generateContent"
             request = Request(url, data=body, headers={
                 "Content-Type": "application/json",
                 "x-goog-api-key": api_key
             }, method="POST")
-            with urlopen(request, timeout=22) as response:
+            # Sem espera/backoff entre modelos: falhou, passa imediatamente ao próximo.
+            with urlopen(request, timeout=min(7, remaining)) as response:
                 result = json.loads(response.read().decode("utf-8"))
-            raw = json.loads(result["candidates"][0]["content"]["parts"][0]["text"])
+
+            candidates = result.get("candidates") or []
+            if not candidates:
+                raise ValueError("A resposta da IA veio sem candidatos.")
+            parts_out = candidates[0].get("content", {}).get("parts", [])
+            raw_text = next((part.get("text") for part in parts_out if part.get("text")), "")
+            raw = json.loads(raw_text)
             questions = raw.get("questions", []) if isinstance(raw, dict) else []
             normalized = []
             for question in questions:
@@ -287,6 +306,7 @@ def generate_gemini_game_questions(source_text, mode, lesson_title, lesson_level
                     random.shuffle(question["words"])
                 elif not isinstance(question.get("answer"), str) or not question["answer"].strip():
                     continue
+
                 question["customLessonChallenge"] = True
                 question["aiModel"] = model
                 question["difficulty"] = difficulty
@@ -298,14 +318,37 @@ def generate_gemini_game_questions(source_text, mode, lesson_title, lesson_level
                 question.setdefault("audioPrompt", question.get("prompt", ""))
                 question.setdefault("language", "en-US" if mode == "question" else "pt-BR")
                 normalized.append(question)
+
             if normalized:
-                print("AI game batch generated with model:", model, "questions:", len(normalized), "difficulty:", difficulty)
+                AI_MODEL_COOLDOWN.pop(model, None)
+                print("AI game batch generated:", model, "questions:", len(normalized), "difficulty:", difficulty)
                 return normalized
-            errors.append(model + ": resposta sem questões válidas")
+            raise ValueError("A resposta não continha questões válidas para este jogo.")
+
         except Exception as error:
-            errors.append(model + ": " + repr(error)[:350])
-            print("AI model failed; trying fallback:", model, repr(error))
-    raise RuntimeError("Todos os modelos Gemini falharam: " + " | ".join(errors))
+            status = getattr(error, "code", None)
+            detail = ""
+            if status:
+                try:
+                    detail = error.read().decode("utf-8", errors="replace")[:500]
+                except Exception:
+                    detail = str(error)[:500]
+            else:
+                detail = str(error)[:500]
+
+            if status in (401, 403):
+                raise RuntimeError("A chave GEMINI_API_KEY foi recusada pela API do Google (HTTP " + str(status) + "). Confira a chave e as permissões no Render. Não adianta testar outros modelos com a mesma chave.")
+            if status == 404:
+                AI_MODEL_COOLDOWN[model] = time.monotonic() + 3600
+            elif status in (429, 500, 502, 503, 504) or isinstance(error, TimeoutError):
+                AI_MODEL_COOLDOWN[model] = time.monotonic() + 20
+            else:
+                AI_MODEL_COOLDOWN[model] = time.monotonic() + 60
+
+            errors.append(model + ((" HTTP " + str(status)) if status else "") + ": " + detail)
+            print("AI model unavailable; switching immediately:", model, "status:", status, repr(error)[:300])
+
+    raise RuntimeError("Nenhum modelo Gemini conseguiu gerar as perguntas nesta tentativa. Modelos testados: " + " || ".join(errors)[:2500])
 
 def hash_password(password, salt=None):
     salt = salt or secrets.token_bytes(16)
@@ -613,7 +656,7 @@ class AppHandler(BaseHTTPRequestHandler):
                     return self.send_json(409, {"error": "Não foram criadas perguntas inéditas. Adicione outro conteúdo à lição para ampliar o banco de atividades."})
                 except Exception as error:
                     print("AI game batch generation failed for student:", user["id"], "mode:", mode, repr(error))
-                    return self.send_json(502, {"error": "Os modelos de IA não conseguiram gerar perguntas agora. Tente novamente em instantes."})
+                    return self.send_json(502, {"error": str(error)[:1800] or "Os modelos de IA não conseguiram gerar perguntas agora.", "retryable": "chave GEMINI_API_KEY" not in str(error) and "Configure GEMINI_API_KEY" not in str(error)})
 
             if path == "/api/games/content" and method == "GET":
                 if user["role"] != "student":
