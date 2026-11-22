@@ -51,7 +51,7 @@ async function fetchAiQuestion(gameMode) {
   if (!response.ok) {
     const error = new Error(result.error || 'Não foi possível gerar uma atividade personalizada.');
     error.status = response.status;
-    error.retryable = result.retryable !== false;
+    error.retryable = result.retryable === true || ([502, 503, 504, 429].includes(response.status) && result.retryable !== false);
     throw error;
   }
   return result.question;
