@@ -99,6 +99,7 @@ def initialize():
             created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
             UNIQUE(user_id, mode, fingerprint)
         )""")
+        db.execute("ALTER TABLE ai_game_questions ADD COLUMN IF NOT EXISTS reserved_at TIMESTAMPTZ")
         db.execute("ALTER TABLE game_attempts ADD COLUMN IF NOT EXISTS question_id TEXT NOT NULL DEFAULT ''")
         db.execute("""CREATE TABLE IF NOT EXISTS game_stats (
             user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
@@ -195,13 +196,21 @@ def generate_gemini_game_question(source_text, mode, lesson_title, level, pdf_co
     return question
 
 
-def generate_gemini_game_questions(source_text, mode, lesson_title, level, pdf_content=None, count=8):
-    """Gera um lote de exercícios em uma única chamada à IA para evitar espera a cada pergunta."""
+def generate_gemini_game_questions(source_text, mode, lesson_title, lesson_level, pdf_content=None, count=8, student_level=1, difficulty=1):
+    """Gera lote de questões com progressão de dificuldade e failover entre modelos Gemini."""
     api_key = os.environ.get("GEMINI_API_KEY", "").strip()
     if not api_key:
         raise RuntimeError("A variável GEMINI_API_KEY não está configurada no Render.")
-    model = os.environ.get("GEMINI_MODEL", "gemini-3.8-flash").strip()
     count = max(4, min(int(count or 8), 12))
+    student_level = max(1, min(int(student_level or 1), 50))
+    difficulty = max(1, min(int(difficulty or 1), 5))
+    difficulty_guidance = {
+        1: "Muito básico: palavras comuns, frases curtas, presente simples e estruturas diretas. Distratores simples.",
+        2: "Básico: rotinas, perguntas e negativas, artigos, pronomes, plurais e passado simples. Frases um pouco maiores.",
+        3: "Intermediário: tempos verbais variados, comparativos, preposições, conectores e compreensão de parágrafos curtos.",
+        4: "Intermediário-avançado: condicionais, voz passiva, reported speech, phrasal verbs e inferência contextual.",
+        5: "Avançado: nuances de significado, collocations, expressões idiomáticas presentes no material, estruturas complexas e interpretação crítica."
+    }
     instructions = {
         "vocabulary": "Cada questão deve testar uma palavra ou expressão do PDF, com quatro alternativas em português e uma correta. Campos: category,prompt,choices,answer,explanation.",
         "grammar": "Cada questão deve testar uma estrutura gramatical realmente presente em frases do PDF, com quatro alternativas e uma correta. Campos: category,prompt,choices,answer,explanation.",
@@ -210,62 +219,93 @@ def generate_gemini_game_questions(source_text, mode, lesson_title, level, pdf_c
         "question": "Cada questão deve ser uma pergunta de compreensão respondida pelo conteúdo do PDF. Campos: category,prompt,audioPrompt,language='en-US',answer,accepted (array)."
     }
     prompt = (
-        "Você é professor de inglês. Use EXCLUSIVAMENTE o PDF anexado e o texto extraído abaixo. "
-        "Leia o PDF anexado diretamente, inclusive se o texto extraído estiver vazio (por exemplo, PDF escaneado). "
+        "Você é professor de inglês e deve criar uma avaliação personalizada. Use EXCLUSIVAMENTE o PDF anexado "
+        "e o texto extraído abaixo como fonte de conteúdo. Leia o PDF diretamente, inclusive se for escaneado. "
         "Não crie perguntas genéricas nem use conhecimento externo. Gere " + str(count) +
-        " questões DIFERENTES, variadas e fiéis ao material. Não repita a mesma palavra, frase ou resposta. "
+        " questões DIFERENTES, sem repetir palavras-alvo, frases ou respostas. "
+        "A dificuldade deve ser adequada ao progresso atual do aluno e subir gradualmente. "
+        "Nível geral do aluno: " + str(student_level) + ". Faixa de dificuldade: " + str(difficulty) + "/5. "
+        "Orientação obrigatória de dificuldade: " + difficulty_guidance[difficulty] + " "
+        "Nível informado pelo professor para a lição: " + str(lesson_level or "não informado") + ". "
+        "Não faça uma questão mais fácil que a faixa indicada, mas não exija conteúdo que não apareça no PDF. "
         "Retorne somente JSON válido no formato {\"questions\":[...]} sem markdown.\n"
-        "Tipo: " + mode + ". Nível: " + str(level or "Iniciante") + ". Lição: " + str(lesson_title) +
-        ".\nInstruções: " + instructions[mode] +
+        "Tipo: " + mode + ". Lição: " + str(lesson_title) + ".\nInstruções: " + instructions[mode] +
         "\nTexto extraído do PDF (pode estar vazio; nesse caso, leia o arquivo PDF anexado):\n" +
         (source_text or "[Nenhum texto foi extraído; utilize o PDF anexado visualmente.]")[:10000]
     )
     parts = [{"text": prompt}]
     if pdf_content:
         parts.append({"inline_data": {"mime_type": "application/pdf", "data": base64.b64encode(bytes(pdf_content)).decode("ascii")}})
-    url = "https://generativelanguage.googleapis.com/v1beta/models/" + model + ":generateContent"
     body = json.dumps({
         "contents": [{"parts": parts}],
-        "generationConfig": {"temperature": 0.85, "responseMimeType": "application/json"}
+        "generationConfig": {"temperature": 0.95, "responseMimeType": "application/json"}
     }).encode("utf-8")
-    request = Request(url, data=body, headers={"Content-Type": "application/json", "x-goog-api-key": api_key}, method="POST")
-    with urlopen(request, timeout=55) as response:
-        result = json.loads(response.read().decode("utf-8"))
-    raw = json.loads(result["candidates"][0]["content"]["parts"][0]["text"])
-    questions = raw.get("questions", []) if isinstance(raw, dict) else []
-    normalized = []
-    for question in questions:
-        if not isinstance(question, dict) or not question.get("prompt"):
-            continue
-        if mode in ("vocabulary", "grammar"):
-            choices = question.get("choices")
-            if not isinstance(choices, list) or len(choices) != 4 or question.get("answer") not in choices:
-                continue
-            question["choices"] = list(choices)
-            random.shuffle(question["choices"])
-        elif mode == "sentence":
-            answer = question.get("answer")
-            if not isinstance(answer, list) or len(answer) < 4:
-                continue
-            words = question.get("words") or answer[:]
-            if sorted(words) != sorted(answer):
-                words = answer[:]
-            question["words"] = list(words)
-            random.shuffle(question["words"])
-        elif not isinstance(question.get("answer"), str) or not question["answer"].strip():
-            continue
-        question["customLessonChallenge"] = True
-        question.setdefault("category", "Atividade personalizada · PDF")
-        question.setdefault("explanation", "Resposta baseada no conteúdo do PDF da sua lição.")
-        if not isinstance(question.get("accepted"), list):
-            question["accepted"] = []
-        question.setdefault("audioPrompt", question.get("prompt", ""))
-        question.setdefault("language", "en-US" if mode == "question" else "pt-BR")
-        normalized.append(question)
-    if not normalized:
-        raise ValueError("A IA não retornou questões válidas para o PDF.")
-    return normalized
 
+    # Sete opções de modelo. Se um modelo estiver indisponível, limitado ou falhar,
+    # tenta o próximo sem interromper o jogo.
+    models = [
+        os.environ.get("GEMINI_MODEL", "").strip(),
+        "gemini-3.8-flash",
+        "gemini-3.7-flash",
+        "gemini-3.6-flash",
+        "gemini-3.5-flash",
+        "gemini-3.5-flash-lite",
+        "gemini-3.1-flash-lite",
+        "gemini-3.1-pro-preview"
+    ]
+    unique_models = list(dict.fromkeys(model for model in models if model))
+    errors = []
+    for model in unique_models:
+        try:
+            url = "https://generativelanguage.googleapis.com/v1beta/models/" + model + ":generateContent"
+            request = Request(url, data=body, headers={
+                "Content-Type": "application/json",
+                "x-goog-api-key": api_key
+            }, method="POST")
+            with urlopen(request, timeout=22) as response:
+                result = json.loads(response.read().decode("utf-8"))
+            raw = json.loads(result["candidates"][0]["content"]["parts"][0]["text"])
+            questions = raw.get("questions", []) if isinstance(raw, dict) else []
+            normalized = []
+            for question in questions:
+                if not isinstance(question, dict) or not question.get("prompt"):
+                    continue
+                if mode in ("vocabulary", "grammar"):
+                    choices = question.get("choices")
+                    if not isinstance(choices, list) or len(choices) != 4 or question.get("answer") not in choices:
+                        continue
+                    question["choices"] = list(choices)
+                    random.shuffle(question["choices"])
+                elif mode == "sentence":
+                    answer = question.get("answer")
+                    if not isinstance(answer, list) or len(answer) < 4:
+                        continue
+                    words = question.get("words") or answer[:]
+                    if sorted(words) != sorted(answer):
+                        words = answer[:]
+                    question["words"] = list(words)
+                    random.shuffle(question["words"])
+                elif not isinstance(question.get("answer"), str) or not question["answer"].strip():
+                    continue
+                question["customLessonChallenge"] = True
+                question["aiModel"] = model
+                question["difficulty"] = difficulty
+                question["studentLevel"] = student_level
+                question.setdefault("category", "Atividade personalizada · PDF")
+                question.setdefault("explanation", "Resposta baseada no conteúdo do PDF da sua lição.")
+                if not isinstance(question.get("accepted"), list):
+                    question["accepted"] = []
+                question.setdefault("audioPrompt", question.get("prompt", ""))
+                question.setdefault("language", "en-US" if mode == "question" else "pt-BR")
+                normalized.append(question)
+            if normalized:
+                print("AI game batch generated with model:", model, "questions:", len(normalized), "difficulty:", difficulty)
+                return normalized
+            errors.append(model + ": resposta sem questões válidas")
+        except Exception as error:
+            errors.append(model + ": " + repr(error)[:350])
+            print("AI model failed; trying fallback:", model, repr(error))
+    raise RuntimeError("Todos os modelos Gemini falharam: " + " | ".join(errors))
 
 def hash_password(password, salt=None):
     salt = salt or secrets.token_bytes(16)
@@ -502,14 +542,20 @@ class AppHandler(BaseHTTPRequestHandler):
                 mode = query.get("mode", ["vocabulary"])[0]
                 if mode not in ("vocabulary", "grammar", "sentence", "translation", "question"):
                     return self.send_json(400, {"error": "Tipo de jogo inválido."})
-                available = db.execute("SELECT id,payload,lesson_id FROM ai_game_questions WHERE user_id=%s AND mode=%s AND used_at='' ORDER BY created_at ASC LIMIT 1", (user["id"], mode)).fetchone()
+
+                # Reserva a pergunta entregue ao navegador. Assim, o pré-carregamento
+                # da próxima nunca devolve a mesma pergunta antes da resposta atual.
+                available = db.execute("""SELECT id,payload,lesson_id FROM ai_game_questions
+                    WHERE user_id=%s AND mode=%s AND used_at=''
+                    AND (reserved_at IS NULL OR reserved_at < CURRENT_TIMESTAMP - INTERVAL '15 minutes')
+                    ORDER BY created_at ASC LIMIT 1""", (user["id"], mode)).fetchone()
                 if available:
+                    db.execute("UPDATE ai_game_questions SET reserved_at=CURRENT_TIMESTAMP WHERE id=%s AND user_id=%s", (available["id"], user["id"]))
                     question = json.loads(available["payload"])
                     question["lessonId"] = available["lesson_id"]
                     question["questionId"] = available["id"]
                     return self.send_json(200, {"question": question, "source": "ai"})
-                # Busca todos os anexos das lições deste aluno; não confia apenas no MIME
-                # informado pelo navegador, pois alguns uploads chegam como octet-stream.
+
                 rows = db.execute("""SELECT l.id,l.title,l.level,a.name,a.mime_type,a.content
                     FROM lessons l JOIN attachments a ON a.lesson_id=l.id
                     WHERE l.student_id=%s
@@ -519,24 +565,33 @@ class AppHandler(BaseHTTPRequestHandler):
                     raw_pdf = bytes(row["content"] or b"")
                     filename = str(row["name"] or "").strip().lower()
                     mime_type = str(row["mime_type"] or "").strip().lower()
-                    header = raw_pdf[:1024]
-                    is_pdf = filename.endswith(".pdf") or "pdf" in mime_type or b"%PDF-" in header
+                    is_pdf = filename.endswith(".pdf") or "pdf" in mime_type or b"%PDF-" in raw_pdf[:1024]
                     if not is_pdf or not raw_pdf:
                         continue
                     extracted = extract_attachment_text(row["name"], row["mime_type"], raw_pdf)
                     sources.append((row, extracted, raw_pdf))
                 if not sources:
-                    print("No PDF attachment found for student:", user["id"], "attachment_count:", len(rows))
-                    return self.send_json(422, {"error": "Não encontrei um PDF anexado às lições deste aluno. O sistema encontrou " + str(len(rows)) + " outro(s) arquivo(s). Confira se o PDF aparece na lista de arquivos da lição no painel do professor."})
-                source_row, source_text, source_pdf = min(sources, key=lambda item: db.execute("SELECT COUNT(*) AS total FROM ai_game_questions WHERE user_id=%s AND lesson_id=%s AND mode=%s", (user["id"], item[0]["id"], mode)).fetchone()["total"])
+                    return self.send_json(422, {"error": "Não encontrei um PDF nas lições atribuídas a esta conta. Peça ao professor para anexar o material em PDF."})
+
+                stats = db.execute("SELECT correct_answers FROM game_stats WHERE user_id=%s", (user["id"],)).fetchone()
+                correct_total = int(stats["correct_answers"]) if stats else 0
+                student_level = (correct_total // 100) + 1
+                difficulty = min(5, ((correct_total % 100) // 20) + 1)
+                source_row, source_text, source_pdf = min(
+                    sources,
+                    key=lambda item: db.execute(
+                        "SELECT COUNT(*) AS total FROM ai_game_questions WHERE user_id=%s AND lesson_id=%s AND mode=%s",
+                        (user["id"], item[0]["id"], mode)
+                    ).fetchone()["total"]
+                )
                 if not os.environ.get("GEMINI_API_KEY", "").strip():
-                    return self.send_json(503, {"error": "A IA ainda não foi configurada no servidor. O administrador precisa adicionar GEMINI_API_KEY no Render."})
-                last_error = None
+                    return self.send_json(503, {"error": "Configure GEMINI_API_KEY nas variáveis do Render para ativar a geração por IA."})
+
                 try:
                     batch_size = int(os.environ.get("GEMINI_GAME_BATCH_SIZE", "8"))
                     questions = generate_gemini_game_questions(
                         source_text, mode, source_row["title"], source_row["level"],
-                        source_row["content"], batch_size
+                        source_pdf, batch_size, student_level, difficulty
                     )
                     for question in questions:
                         question["lessonId"] = source_row["id"]
@@ -546,18 +601,19 @@ class AppHandler(BaseHTTPRequestHandler):
                         db.execute("""INSERT INTO ai_game_questions(id,user_id,lesson_id,mode,fingerprint,payload)
                             VALUES(%s,%s,%s,%s,%s,%s) ON CONFLICT(user_id,mode,fingerprint) DO NOTHING""",
                             (uuid.uuid4().hex,user["id"],source_row["id"],mode,fingerprint,serialized))
-                    available = db.execute("SELECT id,payload,lesson_id FROM ai_game_questions WHERE user_id=%s AND mode=%s AND used_at='' ORDER BY created_at ASC LIMIT 1", (user["id"], mode)).fetchone()
+                    available = db.execute("""SELECT id,payload,lesson_id FROM ai_game_questions
+                        WHERE user_id=%s AND mode=%s AND used_at='' AND reserved_at IS NULL
+                        ORDER BY created_at ASC LIMIT 1""", (user["id"], mode)).fetchone()
                     if available:
+                        db.execute("UPDATE ai_game_questions SET reserved_at=CURRENT_TIMESTAMP WHERE id=%s AND user_id=%s", (available["id"], user["id"]))
                         question = json.loads(available["payload"])
                         question["lessonId"] = available["lesson_id"]
                         question["questionId"] = available["id"]
-                        return self.send_json(200, {"question": question, "source": "ai", "queued": len(questions)})
-                    return self.send_json(409, {"error": "As questões geradas já estavam no histórico. Gere novamente após adicionar conteúdo novo à lição."})
+                        return self.send_json(200, {"question": question, "source": "ai", "queued": len(questions), "difficulty": difficulty, "studentLevel": student_level})
+                    return self.send_json(409, {"error": "Não foram criadas perguntas inéditas. Adicione outro conteúdo à lição para ampliar o banco de atividades."})
                 except Exception as error:
-                    last_error = error
-                    print("AI game batch generation failed:", repr(error))
-                    print("Gemini batch error detail:", repr(last_error))
-                    return self.send_json(502, {"error": "Não foi possível gerar o lote de perguntas a partir do PDF. Verifique o arquivo e tente novamente."})
+                    print("AI game batch generation failed for student:", user["id"], "mode:", mode, repr(error))
+                    return self.send_json(502, {"error": "Os modelos de IA não conseguiram gerar perguntas agora. Tente novamente em instantes."})
 
             if path == "/api/games/content" and method == "GET":
                 if user["role"] != "student":
@@ -604,7 +660,7 @@ class AppHandler(BaseHTTPRequestHandler):
                 attempt_id = uuid.uuid4().hex
                 question_id = str(data.get("questionId", "")).strip()
                 if question_id:
-                    db.execute("UPDATE ai_game_questions SET used_at=CURRENT_TIMESTAMP WHERE id=%s AND user_id=%s AND mode=%s", (question_id, user["id"], mode))
+                    db.execute("UPDATE ai_game_questions SET used_at=CURRENT_TIMESTAMP::text,reserved_at=NULL WHERE id=%s AND user_id=%s AND mode=%s", (question_id, user["id"], mode))
                 db.execute("INSERT INTO game_attempts(id,user_id,lesson_id,game_mode,correct,xp_earned,question_id) VALUES(%s,%s,%s,%s,%s,%s,%s)", (attempt_id, user["id"], lesson_id, mode, int(correct), xp_earned, question_id))
                 return self.send_json(201, {"saved": True, "stats": {"xp": xp_total, "correct_answers": answers_total, "streak": streak}})
 
