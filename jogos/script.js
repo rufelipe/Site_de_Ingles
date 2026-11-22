@@ -738,4 +738,6 @@ document.querySelectorAll('.game-card').forEach((card) => {
 });
 
 updateDashboard();
-loadAssignedLessonContent().finally(() => renderQuiz());
+// Mostra o primeiro desafio imediatamente; carrega perfil, XP e materiais em paralelo.
+renderQuiz();
+loadAssignedLessonContent();
