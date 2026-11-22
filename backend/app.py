@@ -257,7 +257,8 @@ def generate_gemini_game_questions(source_text, mode, lesson_title, level, pdf_c
         question["customLessonChallenge"] = True
         question.setdefault("category", "Atividade personalizada · PDF")
         question.setdefault("explanation", "Resposta baseada no conteúdo do PDF da sua lição.")
-        question.setdefault("accepted", [])
+        if not isinstance(question.get("accepted"), list):
+            question["accepted"] = []
         question.setdefault("audioPrompt", question.get("prompt", ""))
         question.setdefault("language", "en-US" if mode == "question" else "pt-BR")
         normalized.append(question)
