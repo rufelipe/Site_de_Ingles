@@ -595,12 +595,19 @@ class AppHandler(BaseHTTPRequestHandler):
                 if mode not in ("vocabulary", "grammar", "sentence", "translation", "question"):
                     return self.send_json(400, {"error": "Tipo de jogo inválido."})
 
-                # Reserva a pergunta entregue ao navegador. Assim, o pré-carregamento
-                # da próxima nunca devolve a mesma pergunta antes da resposta atual.
+                # Calcula o nível antes de consultar o banco de perguntas em espera.
+                stats = db.execute("SELECT correct_answers FROM game_stats WHERE user_id=%s", (user["id"],)).fetchone()
+                correct_total = int(stats["correct_answers"]) if stats else 0
+                student_level = (correct_total // 100) + 1
+                difficulty = min(5, student_level)
+
+                # Só entrega perguntas geradas para o nível atual; descarta logicamente
+                # perguntas antigas que tenham sido preparadas com a regra de idioma anterior.
                 available = db.execute("""SELECT id,payload,lesson_id FROM ai_game_questions
                     WHERE user_id=%s AND mode=%s AND used_at=''
+                    AND (payload::jsonb->>'difficulty')=%s
                     AND (reserved_at IS NULL OR reserved_at < CURRENT_TIMESTAMP - INTERVAL '15 minutes')
-                    ORDER BY created_at ASC LIMIT 1""", (user["id"], mode)).fetchone()
+                    ORDER BY created_at ASC LIMIT 1""", (user["id"], mode, str(difficulty))).fetchone()
                 if available:
                     db.execute("UPDATE ai_game_questions SET reserved_at=CURRENT_TIMESTAMP WHERE id=%s AND user_id=%s", (available["id"], user["id"]))
                     question = json.loads(available["payload"])
@@ -612,10 +619,6 @@ class AppHandler(BaseHTTPRequestHandler):
                 # Isso evita consultas e extração de arquivos antes de cada geração.
                 lesson_rows = db.execute("""SELECT id,title,level
                     FROM lessons WHERE student_id=%s ORDER BY created_at DESC""", (user["id"],)).fetchall()
-                stats = db.execute("SELECT correct_answers FROM game_stats WHERE user_id=%s", (user["id"],)).fetchone()
-                correct_total = int(stats["correct_answers"]) if stats else 0
-                student_level = (correct_total // 100) + 1
-                difficulty = min(5, student_level)
                 if lesson_rows:
                     # Todas as perguntas agora são gerais e criadas pela IA conforme o nível.
                     # A lição mais recente é usada somente para vincular a tentativa ao aluno.
@@ -643,7 +646,8 @@ class AppHandler(BaseHTTPRequestHandler):
                             (uuid.uuid4().hex,user["id"],source_row["id"],mode,fingerprint,serialized))
                     available = db.execute("""SELECT id,payload,lesson_id FROM ai_game_questions
                         WHERE user_id=%s AND mode=%s AND used_at='' AND reserved_at IS NULL
-                        ORDER BY created_at ASC LIMIT 1""", (user["id"], mode)).fetchone()
+                        AND (payload::jsonb->>'difficulty')=%s
+                        ORDER BY created_at ASC LIMIT 1""", (user["id"], mode, str(difficulty))).fetchone()
                     if available:
                         db.execute("UPDATE ai_game_questions SET reserved_at=CURRENT_TIMESTAMP WHERE id=%s AND user_id=%s", (available["id"], user["id"]))
                         question = json.loads(available["payload"])
