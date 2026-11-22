@@ -662,17 +662,30 @@ class AppHandler(BaseHTTPRequestHandler):
                         db.execute("""INSERT INTO ai_game_questions(id,user_id,lesson_id,mode,fingerprint,payload)
                             VALUES(%s,%s,%s,%s,%s,%s) ON CONFLICT(user_id,mode,fingerprint) DO NOTHING""",
                             (uuid.uuid4().hex,user["id"],source_row["id"],mode,fingerprint,serialized))
-                    available = db.execute("""SELECT id,payload,lesson_id FROM ai_game_questions
+                    available_rows = db.execute("""SELECT id,payload,lesson_id FROM ai_game_questions
                         WHERE user_id=%s AND mode=%s AND used_at='' AND reserved_at IS NULL
                         AND (payload::jsonb->>'difficulty')=%s
                         AND (%s > 2 OR mode <> 'vocabulary' OR (payload::jsonb->>'promptLanguageVersion')='2')
-                        ORDER BY created_at ASC LIMIT 1""", (user["id"], mode, str(difficulty), difficulty)).fetchone()
-                    if available:
-                        db.execute("UPDATE ai_game_questions SET reserved_at=CURRENT_TIMESTAMP WHERE id=%s AND user_id=%s", (available["id"], user["id"]))
-                        question = json.loads(available["payload"])
-                        question["lessonId"] = available["lesson_id"]
-                        question["questionId"] = available["id"]
-                        return self.send_json(200, {"question": question, "source": "ai", "queued": len(questions), "difficulty": difficulty, "studentLevel": student_level})
+                        ORDER BY created_at ASC LIMIT 5""", (user["id"], mode, str(difficulty), difficulty)).fetchall()
+                    if available_rows:
+                        questions_payload = []
+                        for row in available_rows:
+                            question = json.loads(row["payload"])
+                            question["lessonId"] = row["lesson_id"]
+                            question["questionId"] = row["id"]
+                            questions_payload.append(question)
+                        # Reserva somente a primeira. As demais ficam prontas no banco
+                        # para as próximas respostas, sem nova chamada à IA.
+                        first_id = available_rows[0]["id"]
+                        db.execute("UPDATE ai_game_questions SET reserved_at=CURRENT_TIMESTAMP WHERE id=%s AND user_id=%s", (first_id, user["id"]))
+                        return self.send_json(200, {
+                            "question": questions_payload[0],
+                            "questions": questions_payload,
+                            "source": "ai",
+                            "queued": len(questions_payload),
+                            "difficulty": difficulty,
+                            "studentLevel": student_level
+                        })
                     return self.send_json(409, {"error": "Não foram criadas perguntas inéditas. Adicione outro conteúdo à lição para ampliar o banco de atividades."})
                 except Exception as error:
                     print("AI game batch generation failed for student:", user["id"], "mode:", mode, repr(error))
