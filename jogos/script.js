@@ -90,6 +90,9 @@ async function takeAiQuestion(gameMode) {
       prefetchAiQuestion(gameMode);
       return question;
     }
+    if ((aiRetryAfter[gameMode] || 0) > Date.now()) {
+      throw new Error('A IA está temporariamente indisponível. Aguarde alguns segundos e tente novamente.');
+    }
   }
   // Na primeira atividade (ou quando a fila acabar), espera uma questão de IA real.
   // Não mostra mais as mesmas questões fixas como se fossem personalizadas.
@@ -497,7 +500,7 @@ async function renderWritingChallenge() {
   document.getElementById('playPrompt').addEventListener('click', () => speak(challenge.audioPrompt || challenge.prompt, challenge.language || (isTranslation ? 'pt-BR' : 'en-US')));
   document.getElementById('playAnswer').addEventListener('click', () => speak(challenge.answer, 'en-US'));
   document.getElementById('checkWriting').addEventListener('click', () => checkWritingAnswer(challenge));
-  document.getElementById('recordAnswer').addEventListener('click', () => startRecognition());
+  setupSpeechRecognition();
 }
 
 function setupSpeechRecognition() {
