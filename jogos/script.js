@@ -52,6 +52,36 @@ async function fetchAiQuestion(gameMode) {
   return result.question;
 }
 
+// A geração com IA acontece em segundo plano. O aluno nunca precisa esperar a IA
+// para visualizar ou responder à próxima atividade.
+const prefetchedAiQuestions = Object.create(null);
+const pendingAiQuestions = Object.create(null);
+const aiRetryAfter = Object.create(null);
+
+function prefetchAiQuestion(gameMode) {
+  if (pendingAiQuestions[gameMode] || (prefetchedAiQuestions[gameMode] || []).length) return;
+  if ((aiRetryAfter[gameMode] || 0) > Date.now()) return;
+  pendingAiQuestions[gameMode] = fetchAiQuestion(gameMode)
+    .then((question) => {
+      (prefetchedAiQuestions[gameMode] ||= []).push(question);
+      aiRetryAfter[gameMode] = 0;
+    })
+    .catch((error) => {
+      aiRetryAfter[gameMode] = Date.now() + 20000;
+      console.warn('Atividade personalizada será tentada novamente em segundo plano:', error);
+    })
+    .finally(() => {
+      delete pendingAiQuestions[gameMode];
+    });
+}
+
+function takePrefetchedAiQuestion(gameMode) {
+  const queue = prefetchedAiQuestions[gameMode] || [];
+  const question = queue.shift() || null;
+  prefetchAiQuestion(gameMode);
+  return question;
+}
+
 function buildQuestionsFromAssignedLessons(lessons) {
   const generated = [];
   assignedLessonPhrases = [];
@@ -406,14 +436,11 @@ function normalizeAnswer(text) {
 
 async function renderWritingChallenge() {
   const progress = getProgress();
-  let challenge;
-  try {
-    challenge = await fetchAiQuestion(mode);
-  } catch (error) {
+  let challenge = takePrefetchedAiQuestion(mode);
+  if (!challenge) {
     challenge = mode === 'question' && assignedLessonWritingChallenges.length
       ? assignedLessonWritingChallenges[writingIndex % assignedLessonWritingChallenges.length]
       : writingChallenges[mode][writingIndex % writingChallenges[mode].length];
-    console.warn('Usando atividade escrita local de reserva:', error);
   }
   currentGameQuestion = challenge;
   const isTranslation = mode === 'translation';
@@ -515,17 +542,14 @@ function checkWritingAnswer(challenge) {
 
 async function renderQuiz() {
   const progress = getProgress();
-  let question;
-  try {
-    question = await fetchAiQuestion(mode);
-  } catch (error) {
-    // Mantém o jogo disponível quando a IA ou a leitura do PDF falhar.
+  let question = takePrefetchedAiQuestion(mode);
+  if (!question) {
+    // Mostra uma pergunta local imediatamente enquanto a IA prepara o próximo lote.
     const lessonQuestion = assignedLessonQuestions.length
       ? assignedLessonQuestions[questionIndex % assignedLessonQuestions.length]
       : null;
     const defaults = questionSets[mode] || questionSets.vocabulary;
     question = { ...(lessonQuestion || defaults[questionIndex % defaults.length]), lessonId: lessonQuestion?.lessonId || null };
-    console.warn('Usando atividade local de reserva:', error);
   }
   currentGameQuestion = question;
   answered = false;
@@ -587,14 +611,11 @@ function addNextButton() {
 
 async function renderPhrase() {
   const progress = getProgress();
-  let phrase;
-  try {
-    phrase = await fetchAiQuestion('sentence');
-  } catch (error) {
+  let phrase = takePrefetchedAiQuestion('sentence');
+  if (!phrase) {
     phrase = assignedLessonPhrases.length
       ? assignedLessonPhrases[phraseIndex % assignedLessonPhrases.length]
       : { prompt: 'Organize a frase em inglês:', answer: ['I', 'learn', 'English', 'every', 'day'], words: ['English', 'every', 'I', 'day', 'learn'], lessonId: null };
-    console.warn('Usando frase local de reserva:', error);
   }
   currentGameQuestion = phrase;
   selectedWords = [];
