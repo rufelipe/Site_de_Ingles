@@ -380,7 +380,7 @@ const difficultyPhrases = [
 
 function getProgress() {
   const stage = (correctAnswers % 100) + 1;
-  return { level: Math.floor(correctAnswers / 100) + 1, stage, difficulty: Math.min(5, Math.floor(correctAnswers / 20) + 1) };
+  return { level: Math.floor(correctAnswers / 100) + 1, stage, difficulty: Math.min(5, Math.floor(correctAnswers / 100) + 1) };
 }
 const storageKeys = { xp: 'linguaplay-xp', answers: 'linguaplay-answers', streak: 'linguaplay-streak', active: 'linguaplay-last-active' };
 // O servidor é a fonte de verdade; não reutilizamos XP local entre contas diferentes.
@@ -423,7 +423,7 @@ function updateDashboard() {
   document.getElementById('rankName').textContent = `${rankName} ${progress.level}`;
   document.getElementById('stageText').textContent = `Etapa ${progress.stage} de 100`;
   document.getElementById('rankProgress').style.width = `${((progress.stage - 1) / 100) * 100}%`;
-  document.getElementById('nextRankText').textContent = `Dificuldade ${progress.difficulty} de 5 · aumenta a cada 20 etapas`;
+  document.getElementById('nextRankText').textContent = `Dificuldade ${progress.difficulty} de 5 · acompanha seu nível`;
 }
 
 function award(points) {
