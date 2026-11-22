@@ -435,25 +435,26 @@ class AppHandler(BaseHTTPRequestHandler):
                     question["lessonId"] = available["lesson_id"]
                     question["questionId"] = available["id"]
                     return self.send_json(200, {"question": question, "source": "ai"})
+                # Busca todos os anexos das lições deste aluno; não confia apenas no MIME
+                # informado pelo navegador, pois alguns uploads chegam como octet-stream.
                 rows = db.execute("""SELECT l.id,l.title,l.level,a.name,a.mime_type,a.content
                     FROM lessons l JOIN attachments a ON a.lesson_id=l.id
-                    WHERE l.student_id=%s AND (LOWER(a.name) LIKE '%%.pdf' OR LOWER(a.mime_type) LIKE '%%pdf%%')
+                    WHERE l.student_id=%s
                     ORDER BY l.created_at DESC""", (user["id"],)).fetchall()
                 sources = []
                 for row in rows:
                     raw_pdf = bytes(row["content"] or b"")
                     filename = str(row["name"] or "").strip().lower()
                     mime_type = str(row["mime_type"] or "").strip().lower()
+                    header = raw_pdf[:1024]
+                    is_pdf = filename.endswith(".pdf") or "pdf" in mime_type or b"%PDF-" in header
+                    if not is_pdf or not raw_pdf:
+                        continue
                     extracted = extract_attachment_text(row["name"], row["mime_type"], raw_pdf)
-                    # O cabeçalho PDF pode aparecer após bytes iniciais; a identificação
-                    # principal vem do nome/MIME armazenado no cadastro do anexo.
-                    is_pdf = filename.endswith(".pdf") or "pdf" in mime_type
-                    if is_pdf and raw_pdf:
-                        if b"%PDF" not in raw_pdf[:1024]:
-                            print("PDF attachment has an unusual header:", filename, mime_type, len(raw_pdf))
-                        sources.append((row, extracted, raw_pdf))
+                    sources.append((row, extracted, raw_pdf))
                 if not sources:
-                    return self.send_json(422, {"error": "Não encontrei um anexo PDF válido nesta lição. Confira se o arquivo anexado é realmente um PDF."})
+                    print("No PDF attachment found for student:", user["id"], "attachment_count:", len(rows))
+                    return self.send_json(422, {"error": "Não encontrei um PDF anexado às lições deste aluno. O sistema encontrou " + str(len(rows)) + " outro(s) arquivo(s). Confira se o PDF aparece na lista de arquivos da lição no painel do professor."})
                 source_row, source_text, source_pdf = min(sources, key=lambda item: db.execute("SELECT COUNT(*) AS total FROM ai_game_questions WHERE user_id=%s AND lesson_id=%s AND mode=%s", (user["id"], item[0]["id"], mode)).fetchone()["total"])
                 if not os.environ.get("GEMINI_API_KEY", "").strip():
                     return self.send_json(503, {"error": "A IA ainda não foi configurada no servidor. O administrador precisa adicionar GEMINI_API_KEY no Render."})
