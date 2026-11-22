@@ -223,7 +223,7 @@ def generate_gemini_game_questions(source_text, mode, lesson_title, lesson_level
         5: "Use inglês predominantemente, inclusive nos enunciados, com explicações concisas em português ou inglês."
     }
     instructions = {
-        "vocabulary": "Crie questões variadas de vocabulário geral em inglês adequadas ao nível do aluno, com quatro alternativas em português e uma correta. Campos: category,prompt,choices,answer,explanation.",
+        "vocabulary": "Crie questões variadas de vocabulário geral em inglês adequadas ao nível do aluno, com quatro alternativas em português e uma correta. Para dificuldade 1 ou 2, o campo prompt DEVE ser uma pergunta/instrução em português brasileiro, por exemplo: 'O que significa a palavra \\'apple\\'?' ou 'Qual palavra em inglês corresponde a maçã?'. Nunca comece o prompt com What, Which, Choose, Select, Complete, Match ou qualquer instrução em inglês. A palavra-alvo pode estar em inglês, mas todo o restante do enunciado deve estar em português. Campos: category,prompt,choices,answer,explanation.",
         "grammar": "Crie questões variadas de gramática inglesa adequadas ao nível do aluno, com quatro alternativas e uma correta. Campos: category,prompt,choices,answer,explanation.",
         "sentence": "Crie frases originais em inglês adequadas ao nível do aluno para ordenar. Campos: prompt,answer (array de palavras na ordem correta),words (as mesmas palavras embaralhadas).",
         "translation": "Peça traduções de frases cotidianas do português para o inglês, adequadas ao nível. Campos: category,prompt,audioPrompt,language='pt-BR',answer,accepted (array).",
@@ -304,6 +304,25 @@ def generate_gemini_game_questions(source_text, mode, lesson_title, lesson_level
                         continue
                     question["choices"] = list(choices)
                     random.shuffle(question["choices"])
+
+                # No vocabulário dos níveis iniciante e básico, o enunciado deve
+                # estar em português. Rejeita a questão e tenta outro modelo se
+                # a IA insistir em produzir a pergunta em inglês.
+                if mode == "vocabulary" and difficulty <= 2:
+                    prompt_text = str(question.get("prompt", "")).strip().lower()
+                    english_starts = (
+                        "what ", "what's ", "which ", "where ", "when ", "who ",
+                        "choose ", "select ", "complete ", "match ", "translate ",
+                        "fill ", "identify ", "the meaning ", "the word "
+                    )
+                    portuguese_markers = (
+                        "o que ", "qual ", "quais ", "como ", "escolha ",
+                        "selecione ", "complete ", "associe ", "relacione ",
+                        "identifique ", "marque ", "em português", "significa"
+                    )
+                    if prompt_text.startswith(english_starts) or not any(marker in prompt_text for marker in portuguese_markers):
+                        continue
+                    question["promptLanguageVersion"] = 2
                 elif mode == "sentence":
                     answer = question.get("answer")
                     if not isinstance(answer, list) or len(answer) < 4:
@@ -606,8 +625,9 @@ class AppHandler(BaseHTTPRequestHandler):
                 available = db.execute("""SELECT id,payload,lesson_id FROM ai_game_questions
                     WHERE user_id=%s AND mode=%s AND used_at=''
                     AND (payload::jsonb->>'difficulty')=%s
+                    AND (%s > 2 OR mode <> 'vocabulary' OR (payload::jsonb->>'promptLanguageVersion')='2')
                     AND (reserved_at IS NULL OR reserved_at < CURRENT_TIMESTAMP - INTERVAL '15 minutes')
-                    ORDER BY created_at ASC LIMIT 1""", (user["id"], mode, str(difficulty))).fetchone()
+                    ORDER BY created_at ASC LIMIT 1""", (user["id"], mode, str(difficulty), difficulty)).fetchone()
                 if available:
                     db.execute("UPDATE ai_game_questions SET reserved_at=CURRENT_TIMESTAMP WHERE id=%s AND user_id=%s", (available["id"], user["id"]))
                     question = json.loads(available["payload"])
@@ -647,7 +667,8 @@ class AppHandler(BaseHTTPRequestHandler):
                     available = db.execute("""SELECT id,payload,lesson_id FROM ai_game_questions
                         WHERE user_id=%s AND mode=%s AND used_at='' AND reserved_at IS NULL
                         AND (payload::jsonb->>'difficulty')=%s
-                        ORDER BY created_at ASC LIMIT 1""", (user["id"], mode, str(difficulty))).fetchone()
+                        AND (%s > 2 OR mode <> 'vocabulary' OR (payload::jsonb->>'promptLanguageVersion')='2')
+                        ORDER BY created_at ASC LIMIT 1""", (user["id"], mode, str(difficulty), difficulty)).fetchone()
                     if available:
                         db.execute("UPDATE ai_game_questions SET reserved_at=CURRENT_TIMESTAMP WHERE id=%s AND user_id=%s", (available["id"], user["id"]))
                         question = json.loads(available["payload"])
