@@ -54,7 +54,7 @@ async function fetchAiQuestion(gameMode) {
     error.retryable = result.retryable === true || ([502, 503, 504, 429].includes(response.status) && result.retryable !== false);
     throw error;
   }
-  return result.question;
+  return result;
 }
 
 // A geração fica em segundo plano. Se o backend esgotar os modelos por falha
@@ -69,8 +69,12 @@ function prefetchAiQuestion(gameMode) {
     let lastError;
     for (let attempt = 0; attempt < 3; attempt += 1) {
       try {
-        const question = await fetchAiQuestion(gameMode);
-        (prefetchedAiQuestions[gameMode] ||= []).push(question);
+        const result = await fetchAiQuestion(gameMode);
+        const questions = Array.isArray(result?.questions)
+          ? result.questions
+          : (result?.question ? [result.question] : []);
+        if (!questions.length) throw new Error('A IA não retornou perguntas válidas.');
+        (prefetchedAiQuestions[gameMode] ||= []).push(...questions);
         lastAiErrors[gameMode] = null;
         return;
       } catch (error) {
