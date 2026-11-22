@@ -191,8 +191,8 @@ def generate_gemini_game_question(source_text, mode, lesson_title, level, pdf_co
             question["words"] = question["answer"][:]
         random.shuffle(question["words"])
     question["customLessonChallenge"] = True
-    question.setdefault("category", "Atividade personalizada · PDF")
-    question.setdefault("explanation", "Resposta baseada no conteúdo do PDF da sua lição.")
+    question.setdefault("category", "Inglês · nível " + str(difficulty))
+    question.setdefault("explanation", "Explicação de inglês adequada ao nível atual do aluno.")
     question.setdefault("accepted", [])
     question.setdefault("audioPrompt", question.get("prompt", ""))
     question.setdefault("language", "en-US" if mode == "question" else "pt-BR")
@@ -209,22 +209,21 @@ def generate_gemini_game_questions(source_text, mode, lesson_title, lesson_level
     student_level = max(1, min(int(student_level or 1), 50))
     difficulty = max(1, min(int(difficulty or 1), 5))
     difficulty_guidance = {
-        1: "Muito básico: palavras comuns, frases curtas, presente simples e estruturas diretas. Distratores simples.",
-        2: "Básico: rotinas, perguntas e negativas, artigos, pronomes, plurais e passado simples. Frases um pouco maiores.",
-        3: "Intermediário: tempos verbais variados, comparativos, preposições, conectores e compreensão de parágrafos curtos.",
-        4: "Intermediário-avançado: condicionais, voz passiva, reported speech, phrasal verbs e inferência contextual.",
-        5: "Avançado: nuances de significado, collocations, expressões idiomáticas presentes no material, estruturas complexas e interpretação crítica."
+        1: "Iniciante: alfabeto, cumprimentos, números, cores, objetos comuns, verbo to be e frases muito curtas.",
+        2: "Básico: rotina, família, comida, lugares, presente simples, artigos, pronomes, plurais e perguntas simples.",
+        3: "Intermediário: passado e futuro, comparativos, preposições, conectores, modais e compreensão de pequenos diálogos.",
+        4: "Intermediário-avançado: condicionais, voz passiva, reported speech, phrasal verbs e textos mais complexos.",
+        5: "Avançado: collocations, expressões idiomáticas, nuances de significado, estruturas complexas e interpretação crítica."
     }
     instructions = {
-        "vocabulary": "Cada questão deve testar uma palavra ou expressão do PDF, com quatro alternativas em português e uma correta. Campos: category,prompt,choices,answer,explanation.",
-        "grammar": "Cada questão deve testar uma estrutura gramatical realmente presente em frases do PDF, com quatro alternativas e uma correta. Campos: category,prompt,choices,answer,explanation.",
-        "sentence": "Cada questão deve pedir para ordenar uma frase retirada do PDF. Campos: prompt,answer (array de palavras na ordem correta),words (as mesmas palavras embaralhadas).",
-        "translation": "Cada questão deve pedir a tradução de uma frase ou expressão do PDF para inglês. Campos: category,prompt,audioPrompt,language='pt-BR',answer,accepted (array).",
-        "question": "Cada questão deve ser uma pergunta de compreensão respondida pelo conteúdo do PDF. Campos: category,prompt,audioPrompt,language='en-US',answer,accepted (array)."
+        "vocabulary": "Crie questões variadas de vocabulário geral em inglês adequadas ao nível do aluno, com quatro alternativas em português e uma correta. Campos: category,prompt,choices,answer,explanation.",
+        "grammar": "Crie questões variadas de gramática inglesa adequadas ao nível do aluno, com quatro alternativas e uma correta. Campos: category,prompt,choices,answer,explanation.",
+        "sentence": "Crie frases originais em inglês adequadas ao nível do aluno para ordenar. Campos: prompt,answer (array de palavras na ordem correta),words (as mesmas palavras embaralhadas).",
+        "translation": "Peça traduções de frases cotidianas do português para o inglês, adequadas ao nível. Campos: category,prompt,audioPrompt,language='pt-BR',answer,accepted (array).",
+        "question": "Crie perguntas simples e originais de conversação em inglês sobre situações do cotidiano, adequadas ao nível. Campos: category,prompt,audioPrompt,language='en-US',answer,accepted (array)."
     }
     prompt = (
-        "Você é professor de inglês. Use EXCLUSIVAMENTE o PDF anexado e o texto extraído abaixo. "
-        "Leia o PDF diretamente, inclusive se for escaneado. Não invente conteúdo externo. "
+         "Você é professor de inglês e deve criar exercícios originais de inglês para prática geral. Não dependa de PDFs, arquivos ou conteúdo de lições. "
         "Gere " + str(count) + " questões DIFERENTES, sem repetir palavras-alvo, frases ou respostas. "
         "Nível geral do aluno: " + str(student_level) + ". Dificuldade: " + str(difficulty) + "/5. "
         "Orientação: " + difficulty_guidance[difficulty] + " "
@@ -630,20 +629,26 @@ class AppHandler(BaseHTTPRequestHandler):
                         combined_text = "\n\n".join(part for part in lesson_text_parts if part)
                         if len(combined_text.strip()) >= 30:
                             sources.append(({"id": lesson_id, "title": lesson_title, "level": lesson_level}, combined_text[:24000], None))
-                if not sources:
-                    return self.send_json(422, {"error": "Esta conta ainda não tem material de estudo nas lições. Peça ao professor para adicionar um PDF, texto ou conteúdo na descrição da lição."})
-
                 stats = db.execute("SELECT correct_answers FROM game_stats WHERE user_id=%s", (user["id"],)).fetchone()
                 correct_total = int(stats["correct_answers"]) if stats else 0
                 student_level = (correct_total // 100) + 1
                 difficulty = min(5, student_level)
-                source_row, source_text, source_pdf = min(
-                    sources,
-                    key=lambda item: db.execute(
-                        "SELECT COUNT(*) AS total FROM ai_game_questions WHERE user_id=%s AND lesson_id=%s AND mode=%s",
-                        (user["id"], item[0]["id"], mode)
-                    ).fetchone()["total"]
-                )
+                if sources:
+                    source_row, source_text, source_pdf = min(
+                        sources,
+                        key=lambda item: db.execute(
+                            "SELECT COUNT(*) AS total FROM ai_game_questions WHERE user_id=%s AND lesson_id=%s AND mode=%s",
+                            (user["id"], item[0]["id"], mode)
+                        ).fetchone()["total"]
+                    )
+                elif lesson_rows:
+                    # Geração geral: usa uma lição existente apenas como vínculo de propriedade,
+                    # sem ler ou depender de PDF, descrição, anexos ou anotações.
+                    latest_lesson = lesson_rows[0]
+                    source_row = {"id": latest_lesson["id"], "title": "Prática geral de inglês", "level": ""}
+                    source_text, source_pdf = "", None
+                else:
+                    return self.send_json(422, {"error": "É necessário que o professor atribua ao menos uma lição para iniciar os jogos."})
                 if not os.environ.get("GEMINI_API_KEY", "").strip():
                     return self.send_json(503, {"error": "Configure GEMINI_API_KEY nas variáveis do Render para ativar a geração por IA.", "retryable": False})
 
